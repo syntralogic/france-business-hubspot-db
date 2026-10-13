@@ -9,7 +9,7 @@
 
 ## What must be confirmed in the client's portal (not assumed)
 1. Subscription tier and daily import row limit.
-2. Whether a custom company property set to "unique value" can be used as the dedupe key in import for Companies (documented for custom objects/deals; confirm for Companies). Fallback below.
+2. ~~Whether a custom company property set to "unique value" can be the dedupe key for Companies~~ **Verified 13 Oct 2026** (HubSpot KB "Import records for a single object", updated 22 Jul 2026; "Understand the import tool", updated 6 Mar 2026): custom properties that require unique values are available as unique identifiers for **contacts, companies**, deals and others. Using one for companies means **Company domain name no longer requires unique values**. Still to confirm in the client's portal: that the property can be created with "require unique values" on their subscription, and the behaviour on the 100-row test import.
 3. Whether parent/child company associations are available on the plan.
 4. Date format accepted by the portal (we send ISO `YYYY-MM-DD`; set the import's date format accordingly).
 5. A 100-row test import in a test/sandbox portal before the first full import.
@@ -17,7 +17,9 @@
 ## Modelling decision
 **One HubSpot company = one active establishment (SIRET).** Prospecting is local (a baker in Lyon and the same firm's shop in Villeurbanne are different targets). Grouping by `SIREN`, flag `Siege` marks the head office. Optional: link establishments to the head office with parent/child association if the plan supports it (post-import step by SIREN).
 
-Because HubSpot treats **Company domain name** as a dedupe key, establishments of one company sharing a website would merge. The exporter keeps the domain only on the first row of a file and blanks it (with a `DOMAIN_SHARED` warning) on the others; the website stays in `Website URL`. Verify how your import behaves in the test run.
+**Domain handling.** By default HubSpot treats **Company domain name** as the dedupe key, so establishments of one company sharing a website would merge. Two modes:
+- *Default (conservative):* the exporter keeps the domain only on the first row and blanks it (`DOMAIN_SHARED` warning) on the others; the website stays in `Website URL`.
+- *SIRET as import key* (`python -m fbdb.export.run_export --siret-is-import-key`): use only when the import maps the unique custom property `SIRET` as the identifier. Per HubSpot's documentation the domain then stops requiring unique values, so every establishment keeps its domain. Switch on only after the 100-row test import confirms it.
 
 ## Avoiding duplicates on repeated imports
 1. Primary key = `SIRET` (custom text property, "require unique values" enabled) and `ID interne`.

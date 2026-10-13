@@ -216,9 +216,24 @@ def validate_row(row: dict, row_no: int, src: dict, include_closed: bool = False
 
 
 def export_companies(
-    records: Iterable[dict], out_dir: Path, run_date: Optional[date] = None, include_closed: bool = False
+    records: Iterable[dict],
+    out_dir: Path,
+    run_date: Optional[date] = None,
+    include_closed: bool = False,
+    siret_is_import_key: bool = False,
+    allow_google_ratings: bool = False,
 ) -> dict:
-    """Write hubspot_companies_<date>_partNN.csv files (UTF-8, no BOM) and an error report CSV."""
+    """Write hubspot_companies_<date>_partNN.csv files (UTF-8, no BOM) and an error report CSV.
+
+    siret_is_import_key: set True ONLY when the import maps the custom property SIRET (created with
+    "require unique values") as the unique identifier. HubSpot's import documentation (updated 22 Jul 2026)
+    states that in that case "Company domain name" stops requiring unique values, so establishments of one
+    company may keep the same domain. Default False = conservative behaviour (domain only on the first row).
+    Confirm on the 100-row test import before switching it on.
+
+    allow_google_ratings: Google's terms give no caching exception for rating / review count (only place_id), so
+    these two columns are blanked unless the client holds a written agreement or a licensed provider supplies them.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
     run_date = run_date or date.today()
     seen_siret: set[str] = set()
@@ -236,10 +251,12 @@ def export_companies(
         try:
             for i, src in enumerate(records, start=1):
                 row = build_row(src)
+                if not allow_google_ratings:
+                    row["note_google"] = row["nb_avis_google"] = ""
                 issues = validate_row(row, i, src, include_closed)
                 if row["siret"] in seen_siret:
                     issues.append(Issue(i, row["siret"], row["id_interne"], "error", "DUPLICATE_SIRET", "siret", "SIRET already present in this file", row["siret"]))
-                if row["domain"]:
+                if row["domain"] and not siret_is_import_key:
                     if row["domain"] in seen_domain:
                         # HubSpot merges companies sharing a domain: keep domain on the first row only
                         issues.append(Issue(i, row["siret"], row["id_interne"], "warning", "DOMAIN_SHARED", "domain", "Domain already used by another row; domain blanked to avoid merge", row["domain"]))

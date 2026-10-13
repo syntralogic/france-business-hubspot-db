@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
+import time
 from typing import Iterator, Optional
 
 import httpx
@@ -20,11 +22,33 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 
 BASE_URL = os.environ.get("SIRENE_API_BASE", "https://api.insee.fr/api-sirene/3.11")
 PAGE_SIZE = 1000
+# INSEE public quota: 30 requests per minute (verified 13 Oct 2026, insee.fr + api.gouv.fr). Stay just under it
+# instead of living on 429 retries: one call every 2.1 s = 28.5/min.
+MIN_INTERVAL_S = float(os.environ.get("SIRENE_MIN_INTERVAL_S", "2.1"))
 log = logging.getLogger("fbdb.sirene_api")
 
 
 class RetryableError(Exception):
     pass
+
+
+class Throttle:
+    """Minimum spacing between calls (thread-safe). Injectable clock/sleep so it is testable."""
+
+    def __init__(self, min_interval: float, clock=time.monotonic, sleep=time.sleep):
+        self.min_interval, self._clock, self._sleep = min_interval, clock, sleep
+        self._last: Optional[float] = None
+        self._lock = threading.Lock()
+
+    def wait(self) -> None:
+        with self._lock:
+            now = self._clock()
+            if self._last is not None:
+                delay = self.min_interval - (now - self._last)
+                if delay > 0:
+                    self._sleep(delay)
+                    now = self._clock()
+            self._last = now
 
 
 def _to_str(v) -> str:
@@ -53,6 +77,7 @@ def flatten_etablissement(item: dict) -> dict:
 class SireneApiClient:
     def __init__(self, api_key: Optional[str] = None, timeout: float = 60.0):
         key = api_key or os.environ["INSEE_API_KEY"]
+        self._throttle = Throttle(MIN_INTERVAL_S)
         self._client = httpx.Client(
             base_url=BASE_URL, headers={"X-INSEE-Api-Key-Integration": key, "Accept": "application/json"}, timeout=timeout
         )
@@ -64,6 +89,7 @@ class SireneApiClient:
         reraise=True,
     )
     def _get(self, path: str, params: dict) -> dict:
+        self._throttle.wait()
         resp = self._client.get(path, params=params)
         if resp.status_code == 429 or resp.status_code >= 500:
             raise RetryableError(f"HTTP {resp.status_code}")

@@ -73,6 +73,15 @@ def test_shared_domain_kept_only_on_first_row(tmp_path):
     assert r[1]["Website URL"] != "" and any(e["code"] == "DOMAIN_SHARED" for e in errs)
 
 
+def test_shared_domain_kept_when_siret_is_import_key(tmp_path):
+    a = good(website="https://www.exemple.fr")
+    b = good(internal_id=2, siret="55210055400021", website="https://exemple.fr/contact")
+    res = export_companies([a, b], tmp_path, run_date=date(2026, 10, 13), siret_is_import_key=True)
+    with open(res["files"][0], newline="", encoding="utf-8") as fh:
+        r = list(csv.DictReader(fh))
+    assert r[0]["Company domain name"] == "exemple.fr" and r[1]["Company domain name"] == "exemple.fr"
+
+
 def test_french_characters_roundtrip_utf8(tmp_path):
     res, _ = run([good(legal_name="Café de l'Étoile Müller", city="SAINT-ÉTIENNE")], tmp_path)
     raw = open(res["files"][0], "rb").read()
@@ -83,3 +92,14 @@ def test_french_characters_roundtrip_utf8(tmp_path):
 def test_control_chars_stripped_and_limit_constant():
     assert build_row(good(legal_name="A\x00B\x07C"))["name"] == "ABC"
     assert MAX_ROWS_PER_FILE < 1_048_576
+
+
+def test_google_ratings_blanked_by_default(tmp_path):
+    src = good(google_rating="4.6", google_reviews="120")
+    res, _ = run([src], tmp_path)
+    r = rows(res)[0]
+    assert r["Note Google"] == "" and r["Nombre avis Google"] == ""
+    res2 = export_companies([src], tmp_path / "ok", run_date=date(2026, 10, 13), allow_google_ratings=True)
+    with open(res2["files"][0], newline="", encoding="utf-8") as fh:
+        r2 = list(csv.DictReader(fh))[0]
+    assert r2["Note Google"] == "4.6" and r2["Nombre avis Google"] == "120"

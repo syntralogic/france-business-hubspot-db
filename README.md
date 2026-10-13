@@ -5,9 +5,9 @@ Pipeline that builds a deduplicated, enriched database of French businesses and 
 
 ## Status
 Built incrementally, one commit per step. Docs in `docs/` (01-12 follow the requested response order).
-Implemented and unit-tested (37 tests): normalization, dedup, conflict resolution, SIRENE bulk + API delta mapping,
+Implemented and unit-tested (40 tests): normalization, dedup, conflict resolution, SIRENE bulk + API delta mapping,
 HubSpot export with validation. SQL and live-API paths are written but still need integration testing against a real
-PostgreSQL and INSEE API key (see docs/10-testing-acceptance.md).
+PostgreSQL and INSEE API key (see docs/10-testing-acceptance.md). Source and HubSpot facts were re-verified on 13 Oct 2026: see docs/13-verification-log.md.
 
 ## Quick start
 ```

@@ -12,7 +12,7 @@ Director/representative names and roles; sole proprietors' names and addresses (
 - **Transparency**: the client must inform people whose data it holds (GDPR Art. 14, at first contact and within one month of obtaining data) and provide a clear opt-out in every message.
 - **Rights**: access / rectification / erasure / objection. Maintain a **suppression list** table; every export excludes suppressed SIRET/SIREN/email/domain; deletion requests must also be pushed to HubSpot.
 - **Retention**: define a retention period (proposal: closed companies kept 12 months for change tracking, personal data of directors deleted when no longer active/needed).
-- **Electronic prospecting rules**: CNIL guidance treats legal entities and sole proprietors differently for email/SMS prospecting. Confirm with counsel which regime applies to each record category before mailing.
+- **Electronic prospecting rules** (CNIL guidance and CPCE art. L34-5 as summarised by CCI Paris IDF, updated 25 Jun 2026 and CNIL commentary of Jun 2026; **not legal advice**): B2C email/SMS needs prior consent (opt-in). B2B email works on an opt-out regime **only if** the person was informed that the address would be used for prospecting, the message concerns their profession, and a simple free opposition is offered in every message. Art. 14 GDPR information is still required for indirectly collected data. Human phone prospecting to professionals needs prior information and an opposition right; Bloctel concerns consumers. Sole proprietors are natural persons: have counsel confirm the regime per record category before mailing.
 - Legal representatives are **not** distributed by INSEE in open data; directors must come from INPI RNE / Annuaire des Entreprises / licensed providers, each under its own terms.
 
 ## Source licensing rules
@@ -20,7 +20,7 @@ Director/representative names and roles; sole proprietors' names and addresses (
 |---|---|
 | SIRENE, BODACC, ADEME RGE, INPI open parts | Open licence (attribution), personal-data obligations still apply |
 | Pages Jaunes / Solocal | **No scraping**; only via written commercial data licence |
-| Google Places | Provider ToS limit caching/storage; store only what is permitted, treat ratings as optional and refreshable |
+| Google Places | Verified: only `place_id` is exempt from the caching ban; lat/lng up to 30 days. **Do not store ratings or review counts** without a written agreement |
 | LinkedIn | No scraping; only URLs obtained from permitted sources |
 | Pappers / other paid APIs | Check redistribution, caching and CRM-storage clauses in the contract |
 | Websites | Respect robots.txt and ToS; no automated harvesting of personal emails |

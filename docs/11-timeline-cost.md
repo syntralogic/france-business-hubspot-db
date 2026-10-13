@@ -32,4 +32,4 @@ Development = effort days x agreed day rate (e.g. 38-57 days). Add the one-time 
 ## Expected coverage (to be measured, not promised)
 - SIRENE contains far more than 1M active establishments; a 500k-1M+ deliverable is a **selection** (sectors, departments, employer/artisan flags), not a source limit.
 - Registry fields: near-complete for diffusible units. Directors: good for companies, none for most sole proprietors. Revenue: only where accounts are public. Phone/email: depends entirely on the licensed source and its match rate.
-- Weekly processing: delta load and diff in minutes to about an hour; monthly full reconciliation about 1-3 hours (to be measured).
+- Weekly processing: INSEE API quota is 30 requests/min and the client spaces calls 2.1 s apart; at 1,000 rows per page a 300,000-row weekly delta is about 300 calls, i.e. roughly 11 minutes of API time (arithmetic, to be measured). Delta load and diff in minutes to about an hour; monthly full reconciliation about 1-3 hours (to be measured).
