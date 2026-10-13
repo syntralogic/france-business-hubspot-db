@@ -1,0 +1,11 @@
+.env
+*.env
+data/raw/*
+data/staging/*
+data/exports/*
+reports/*
+!**/.gitkeep
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
