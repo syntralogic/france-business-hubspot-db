@@ -21,3 +21,6 @@
 7. Weekly run is idempotent (second run of the same week produces 0 new history rows) and finishes under the agreed window.
 8. Weekly report lists added / updated / closed / unchanged / review counts, reconciling to the batch table.
 9. Setup docs allow a fresh machine to reproduce a load from scratch.
+
+## Live smoke test (run once with real network and the INSEE key)
+`PYTHONPATH=src python scripts/live_smoke.py` checks, without writing to the database: one SIREN on the INSEE API, a pull of 100 establishments flattened with the production mapper, and the Annuaire client on two known SIRENs plus one unknown. It prints PASS/FAIL per check and exits 1 on any failure. Record the result in `docs/13-verification-log.md`. Not yet run against the live APIs (no INSEE key and no outbound access in the build environment).
