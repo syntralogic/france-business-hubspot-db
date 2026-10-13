@@ -74,6 +74,13 @@ WHERE (company_addresses.is_head_office, company_addresses.establishment_name, c
        EXCLUDED.street, EXCLUDED.complement, EXCLUDED.postal_code, EXCLUDED.city, EXCLUDED.department_code);
 """
 
+SET_WATERMARK = """
+INSERT INTO pipeline_state (key, value)
+SELECT 'sirene_last_processed', max(source_last_processed) FROM stg_sirene_etab
+HAVING max(source_last_processed) IS NOT NULL
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
+"""
+
 UPDATE_ARTISAN_FLAG = """
 UPDATE companies c SET is_artisan = a.flag
 FROM (SELECT siren, bool_or(is_artisan) AS flag FROM stg_sirene_etab GROUP BY siren) a
@@ -108,6 +115,7 @@ def load(ul_path: Path, etab_path: Path, only_active: bool, dsn: str) -> None:
                 cur.execute(UPSERT_COMPANIES)
                 cur.execute(UPSERT_ESTABLISHMENTS)
                 cur.execute(UPDATE_ARTISAN_FLAG)
+                cur.execute(SET_WATERMARK)
                 cur.execute(
                     "UPDATE import_export_batches SET status='success', finished_at=now(), rows_read=%s WHERE batch_id=%s",
                     (n_ul + n_et, batch_id),
