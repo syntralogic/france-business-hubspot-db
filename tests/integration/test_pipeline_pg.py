@@ -242,3 +242,24 @@ def test_hubspot_export_from_view(db, tmp_path):
     assert by_siret[T1_HQ]["Departement"] == "Rhône" and by_siret[T1_HQ]["Departement code"] == "69"
     assert by_siret[T1_HQ]["Forme juridique"].startswith("SARL")
     assert "CAFE DE L'ETOILE MULLER" in {r["Company name"] for r in rows} or any("ETOILE" in r["Company name"] for r in rows)
+
+
+def test_reference_loader_fills_naf_labels_in_the_view(db, tmp_path):
+    from fbdb.load import reference
+    naf = tmp_path / "naf.csv"
+    naf.write_text("Code;Libellé;trade\n1071C;Boulangerie et boulangerie-pâtisserie;Boulanger\n43.22A;Travaux d'installation d'eau et de gaz;\n",
+                   encoding="utf-8")
+    cj = tmp_path / "cj.csv"
+    cj.write_text("code;libelle\n5499;Société à responsabilité limitée (sans autre indication)\n", encoding="utf-8")
+    res = reference.load(DSN, naf=naf, legal_forms=cj)
+    assert res["naf_loaded"] == 2 and res["legal_forms_loaded"] == 1
+    reference.load(DSN, naf=naf, legal_forms=cj)                                   # idempotent
+    v = {r["siret"]: r for r in q("SELECT * FROM v_hubspot_companies")}
+    assert v[T1_HQ]["naf_label"] == "Boulangerie et boulangerie-pâtisserie" and v[T1_HQ]["trade"] == "Boulanger"
+    assert v[T3]["naf_label"].startswith("Travaux d'installation") and v[T3]["trade"] is None
+    assert v[T1_HQ]["legal_form"].startswith("Société à responsabilité limitée")   # official file overrides the curated label
+    # a later plain INSEE file (no trade column) must not wipe the curated trade
+    plain = tmp_path / "plain.csv"
+    plain.write_text("code;label\n10.71C;Boulangerie et boulangerie-pâtisserie\n", encoding="utf-8")
+    reference.load(DSN, naf=plain)
+    assert q("SELECT trade FROM naf_reference WHERE naf = '10.71C'")[0]["trade"] == "Boulanger"

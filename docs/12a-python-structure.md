@@ -4,15 +4,17 @@
 ```
 france-business-hubspot-db/
 ├── docs/                      blueprint documents (index: docs/00-index.md)
-├── sql/                       001 core schema, 002 staging, 003 pipeline state, 004 export view, 005 directors bookkeeping
+├── sql/                       000 reference data, 001 core schema, 002 staging, 003 pipeline state, 004 export view,
+│                              005 directors bookkeeping, 006 closure-date upgrade
 ├── src/fbdb/
 │   ├── extract/               sirene_bulk.py (CSV stock mapping), sirene_api.py (delta client, 30 req/min throttle, retries)
 │   ├── transform/             normalize.py (SIREN/SIRET Luhn, names, addresses, phones E.164, emails, domains)
-│   ├── load/                  sirene_loader.py (COPY -> staging -> upsert), weekly.py (delta, change history, report)
+│   ├── load/                  sirene_loader.py (COPY -> staging -> upsert), weekly.py (delta, change history, report),
+│   │                          reference.py (NAF labels / legal forms from INSEE CSV files)
 │   ├── match/                 dedup.py (identifier ladder + fuzzy), resolve.py (source priority / recency / confidence)
 │   ├── enrich/                annuaire.py (API client), directors.py (weekly directors refresh)
 │   └── export/                hubspot.py (columns, validation, error report, file split), run_export.py (CLI)
-├── scripts/                   run_weekly.sh (cron wrapper), make_sample.py, gen_schema_doc.py
+├── scripts/                   init_db.sh (create/upgrade schema), run_weekly.sh (cron wrapper), make_sample.py, gen_schema_doc.py
 ├── examples/                  FICTIONAL sample CSV + error report (never import)
 ├── tests/                     unit tests + integration/ (real PostgreSQL via TEST_DATABASE_URL)
 ├── data/, reports/            local outputs, git-ignored

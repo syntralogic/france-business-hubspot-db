@@ -25,4 +25,7 @@ The brief asks that source and HubSpot capabilities are verified before the mapp
 - `SireneApiClient` now spaces calls 2.1 s apart (quota 30/min) instead of relying on 429 retries.
 - `run_export --siret-is-import-key` keeps the shared domain on every establishment when the import uses the unique SIRET property.
 - Google rating and review count columns stay empty unless a licensed source supplies them.
+- `sql/000_reference_data.sql`: department/region names come from the official geo.api.gouv.fr list (101 departments, 18 regions, read 13 Oct 2026 through the documentation tooling). Employee-range labels follow the INSEE trancheEffectifs nomenclature. The legal-form table is a curated subset written by hand: an unknown code is exported as the raw code, and `fbdb.load.reference` loads the complete official table.
+- NAF labels are not typed in: `fbdb.load.reference --naf` loads the INSEE file (the sandbox could not download it).
+- Closure date: the INSEE variable names for the period start / state-change flag could not be re-checked against the official variable list (robots/egress). The mapping only fires when both fields are present, so a wrong or missing name leaves the date unknown and the weekly run records the date it first saw the closure (`closure_date_basis = 'observed'`). Check one real closed establishment from the API before relying on `insee` dates.
 - `fbdb.enrich.directors` keeps natural persons only, stores the birth year only, and skips sole proprietors, non-diffusible and closed companies.
