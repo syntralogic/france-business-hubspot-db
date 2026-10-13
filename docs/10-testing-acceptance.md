@@ -1,6 +1,6 @@
 # 14. Testing and Acceptance Criteria
 
-## Automated tests (`pytest`, currently 52 passing: 44 unit + 8 PostgreSQL integration)
+## Automated tests (`pytest`, currently 65 passing: 51 unit + 14 PostgreSQL integration)
 | Area | Covered |
 |---|---|
 | Normalization | SIREN/SIRET Luhn (incl. La Poste rule), names, addresses, phones, emails, domains |

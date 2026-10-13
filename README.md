@@ -5,7 +5,7 @@ Pipeline that builds a deduplicated, enriched database of French businesses and 
 
 ## Status
 Built incrementally, one commit per step. Start with `docs/00-index.md`: it maps the 16 sections of the client brief to files.
-Implemented and tested (52 tests: 44 unit + 8 against a real PostgreSQL 16): normalization, dedup, conflict resolution, SIRENE bulk + API delta,
+Implemented and tested (65 tests: 51 unit + 14 against a real PostgreSQL 16): normalization, dedup, conflict resolution, SIRENE bulk + API delta,
 directors enrichment (Annuaire des Entreprises), HubSpot export with validation. Not built yet: licensed phone/email, Pappers financials, ADEME certifications, Google ratings (see docs/11-timeline-cost.md). The live INSEE API path needs a real INSEE API key, and the Annuaire client should be run once against the live API on the server (see docs/10-testing-acceptance.md and docs/13-verification-log.md). Source and HubSpot facts were re-verified on 13 Oct 2026: see docs/13-verification-log.md.
 
 ## Quick start
