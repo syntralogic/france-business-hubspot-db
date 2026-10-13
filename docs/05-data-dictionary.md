@@ -37,6 +37,7 @@ Legend: **R** = required, **O** = optional. Status vocabulary for contact-like f
 | freshness_status | TEXT | R | fresh (<30d) / stale / expired | fresh | computed |
 | missing_fields | TEXT[] | O | Names of empty key fields | {phone,email} | computed |
 | created_at / updated_at / last_verified_at | TIMESTAMPTZ | R/R/O | Lifecycle timestamps | 2026-10-13T06:00Z | |
+| directors_checked_at | TIMESTAMPTZ | O | Last directors lookup (Annuaire); NULL = never checked. Stops companies with no director being re-queried weekly | 2026-10-13T06:00Z | set by `fbdb.enrich.directors` |
 
 Indexes: PK, UNIQUE(siren), (status), (main_naf), GIN trigram on legal_name.
 

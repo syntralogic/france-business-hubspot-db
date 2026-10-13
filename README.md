@@ -4,32 +4,34 @@ Pipeline that builds a deduplicated, enriched database of French businesses and 
 (SIRENE-based) and exports a HubSpot-ready CSV. No website or frontend: data in, CSV out.
 
 ## Status
-Built incrementally, one commit per step. Docs in `docs/` (01-12 follow the requested response order).
-Implemented and unit-tested (40 tests): normalization, dedup, conflict resolution, SIRENE bulk + API delta mapping,
-HubSpot export with validation. SQL is integration-tested against a real PostgreSQL 16 (tests/integration, 4 tests: bulk load, weekly delta, change history, closures, export). The live INSEE API path still needs a real INSEE API key (see docs/10-testing-acceptance.md). Source and HubSpot facts were re-verified on 13 Oct 2026: see docs/13-verification-log.md.
+Built incrementally, one commit per step. Start with `docs/00-index.md`: it maps the 16 sections of the client brief to files.
+Implemented and tested (52 tests: 44 unit + 8 against a real PostgreSQL 16): normalization, dedup, conflict resolution, SIRENE bulk + API delta,
+directors enrichment (Annuaire des Entreprises), HubSpot export with validation. Not built yet: licensed phone/email, Pappers financials, ADEME certifications, Google ratings (see docs/11-timeline-cost.md). The live INSEE API path needs a real INSEE API key, and the Annuaire client should be run once against the live API on the server (see docs/10-testing-acceptance.md and docs/13-verification-log.md). Source and HubSpot facts were re-verified on 13 Oct 2026: see docs/13-verification-log.md.
 
 ## Quick start
 ```
 python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
 cp .env.example .env            # fill DATABASE_URL and INSEE_API_KEY
-psql $DATABASE_URL -f sql/001_schema.sql -f sql/002_staging.sql -f sql/003_pipeline_state.sql -f sql/004_export_view.sql
+psql $DATABASE_URL -f sql/001_schema.sql -f sql/002_staging.sql -f sql/003_pipeline_state.sql -f sql/004_export_view.sql -f sql/005_directors_enrichment.sql
 python -m fbdb.load.sirene_loader --ul StockUniteLegale_utf8.csv --etab StockEtablissement_utf8.csv --only-active
 python -m fbdb.load.weekly            # weekly delta (or scripts/run_weekly.sh from cron)
+python -m fbdb.enrich.directors --limit 5000   # directors refresh (also run by run_weekly.sh)
 python -m fbdb.export.run_export      # writes HubSpot CSV + error report to data/exports/
 pytest
 TEST_DATABASE_URL=postgresql://user:pw@localhost/fbdb_test pytest tests/integration -q   # real PostgreSQL, throw-away DB (drops schema public)
 ```
 
-## Planned stack
+## Stack
 - PostgreSQL (central store), Python 3.11+ (ETL, matching, enrichment)
 - Weekly scheduled run (cron or systemd timer)
 - Primary source: INSEE SIRENE (bulk files + API); enrichment from authorized providers only
 
 ## Layout
-- docs/ : blueprint documents (requirements, sources, schema, mapping, costs)
+- docs/ : blueprint documents (index in docs/00-index.md)
 - sql/ : PostgreSQL DDL
 - src/fbdb/ : extract, transform, match, enrich, load, export
-- config/ : settings templates (no secrets)
+- examples/ : fictional sample CSV (never import)
+- scripts/ : cron wrapper, sample and schema-doc generators
 - tests/ : unit and integration tests
 - data/ and reports/ : local outputs (git-ignored)
 

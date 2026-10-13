@@ -1,6 +1,6 @@
 # 14. Testing and Acceptance Criteria
 
-## Automated tests (`pytest`, currently 37 passing)
+## Automated tests (`pytest`, currently 52 passing: 44 unit + 8 PostgreSQL integration)
 | Area | Covered |
 |---|---|
 | Normalization | SIREN/SIRET Luhn (incl. La Poste rule), names, addresses, phones, emails, domains |
@@ -8,6 +8,7 @@
 | SIRENE mapping | active/closed, sole proprietor, non-diffusible, artisan flag, Corsica/DOM departments, CSV streaming |
 | API flattening | current period selection, JSON booleans, reuse of bulk mappers |
 | HubSpot export | rejection/warning codes, duplicate SIRET, shared domain, UTF-8 no BOM, control chars, file split constant |
+| Directors enrichment | Annuaire response mapping (natural persons only, birth year only, name normalization); PostgreSQL: scope guards, insert/remove/reactivate, old/new history, idempotent re-run, API failure -> partial batch and retry |
 | Automated (needs TEST_DATABASE_URL) | `tests/integration`: schema, bulk upsert, weekly delta, change history, closures, idempotent re-run, export view, run against PostgreSQL 16 on 13 Oct 2026 |
 
 ## Acceptance criteria (measured on the delivered dataset)
