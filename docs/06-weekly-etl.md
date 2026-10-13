@@ -28,6 +28,7 @@ flowchart TD
 ## Rules
 - **Idempotent**: re-running a week yields no new history rows (diff finds nothing).
 - **Closures**: establishment/company `status` change to `closed` writes a `close` history row and drops the record from the next HubSpot export (flagged for HubSpot update, not deleted).
+- **Closure date**: if the SIRENE API period began with the change of administrative state, its start date is stored as the exact closure date (`closure_date_basis = 'insee'`). Otherwise the weekly run stores the date INSEE processed the change and marks it `observed`; bulk-loaded closed units keep it empty. A reopened unit has the date cleared.
 - **Changes logged**: street, postal code, city, NAF, name, head-office flag, status, legal form, headcount band.
 - **Retries**: exponential backoff (2 s to 120 s, 6 attempts) on HTTP 429/5xx and network errors; a failed batch is marked `failed` in `import_export_batches`, rolled back, and the watermark is not advanced.
 - **Weekly report** (`reports/weekly_YYYY-MM-DD.md`): read, added, updated, closed, unchanged, review.

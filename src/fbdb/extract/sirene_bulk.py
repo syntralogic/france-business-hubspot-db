@@ -94,6 +94,14 @@ def map_etablissement(row: dict) -> Optional[dict]:
         _clean(row.get("typeVoieEtablissement")), _clean(row.get("libelleVoieEtablissement")),
     ]
     postal = _clean(row.get("codePostalEtablissement"))
+    status = "active" if _clean(row.get("etatAdministratifEtablissement")) == "A" else "closed"
+    # Exact closure date: only when the current period itself began with the change of administrative state.
+    # These two keys come from the API period (see sirene_api.flatten_etablissement); the stock CSV does not
+    # carry them, so for bulk loads the date stays NULL and the weekly run records the date it first saw the
+    # closure (closure_date_basis = 'observed'). Never guessed.
+    closure_date = None
+    if status == "closed" and _clean(row.get("changementEtatAdministratifEtablissement")) == "true":
+        closure_date = _date(row.get("dateDebutPeriodeEtablissement"))
     return {
         "siret": siret,
         "siren": siren,
@@ -101,8 +109,9 @@ def map_etablissement(row: dict) -> Optional[dict]:
         "is_head_office": _clean(row.get("etablissementSiege")) == "true",
         "establishment_name": _clean(row.get("enseigne1Etablissement")) or _clean(row.get("denominationUsuelleEtablissement")),
         "naf": _clean(row.get("activitePrincipaleEtablissement")),
-        "status": "active" if _clean(row.get("etatAdministratifEtablissement")) == "A" else "closed",
+        "status": status,
         "creation_date": _date(row.get("dateCreationEtablissement")),
+        "closure_date": closure_date,
         "street": " ".join(p for p in street_parts if p) or None,
         "complement": _clean(row.get("complementAdresseEtablissement")),
         "postal_code": postal if postal and len(postal) == 5 else None,

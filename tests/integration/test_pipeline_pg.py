@@ -105,7 +105,7 @@ def db(tmp_path_factory):
     with psycopg.connect(DSN, autocommit=True) as conn:
         conn.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
         for f in ("000_reference_data.sql", "001_schema.sql", "002_staging.sql", "003_pipeline_state.sql",
-                  "004_export_view.sql"):
+                  "004_export_view.sql", "006_closure_date.sql"):
             conn.execute((SQL_DIR / f).read_text(encoding="utf-8"))
     tmp = tmp_path_factory.mktemp("sirene")
     write_csv(tmp / "ul.csv", UL_COLUMNS, UL_ROWS)
@@ -193,6 +193,37 @@ def test_view_unknown_codes_fall_back_to_raw_code_not_a_guess(db):
         conn.execute("UPDATE companies SET legal_form_code = '5499', employee_range = NULL WHERE siren = %s", (S3,))
 
 
+def test_closure_dates_observed_exact_and_cleared_on_reopen(db):
+    # T2/S2 were closed by the delta above without an exact INSEE date -> the date INSEE processed it, marked observed
+    r = q("SELECT closure_date::text AS d, closure_date_basis AS b FROM company_addresses WHERE siret = %s", (T2,))[0]
+    assert (r["d"], r["b"]) == ("2026-10-08", "observed")
+    c = q("SELECT closure_date::text AS d, closure_date_basis AS b FROM companies WHERE siren = %s", (S2,))[0]
+    assert (c["d"], c["b"]) == ("2026-10-08", "observed")
+    assert q("SELECT count(*) AS n FROM company_addresses WHERE status = 'active' AND closure_date IS NOT NULL")[0]["n"] == 0
+    # the identical run done in the previous test did not move the date
+    assert q("SELECT count(*) AS n FROM company_change_history WHERE change_type = 'close' AND establishment_id = "
+             "(SELECT establishment_id FROM company_addresses WHERE siret = %s)", (T2,))[0]["n"] == 1
+
+    # an API period that began with the closure carries the exact date -> basis 'insee'
+    exact = {"changementEtatAdministratifEtablissement": "true", "dateDebutPeriodeEtablissement": "2026-10-10"}
+    rows = [flat(ul(S3, "PLOMBERIE SAINT-ETIENNE", naf="43.22A", state="C", processed="2026-10-12T09:00:00"),
+                 {**et(S3, T3, 1, "true", "JEAN JAURES", "42000", "SAINT-ETIENNE", state="F", naf="43.22A",
+                       processed="2026-10-12T09:00:00"), **exact})]
+    weekly.run("2026-10-11T00:00:00", DSN, client=FakeClient(rows))
+    r = q("SELECT closure_date::text AS d, closure_date_basis AS b FROM company_addresses WHERE siret = %s", (T3,))[0]
+    assert (r["d"], r["b"]) == ("2026-10-10", "insee")
+    weekly.run("2026-10-11T00:00:00", DSN, client=FakeClient(rows))                      # idempotent
+    assert q("SELECT closure_date::text AS d FROM company_addresses WHERE siret = %s", (T3,))[0]["d"] == "2026-10-10"
+
+    # reopened: the closure date is cleared, the reopening is in the history
+    rows = [flat(ul(S3, "PLOMBERIE SAINT-ETIENNE", naf="43.22A", processed="2026-10-13T09:00:00"),
+                 et(S3, T3, 1, "true", "JEAN JAURES", "42000", "SAINT-ETIENNE", naf="43.22A", processed="2026-10-13T09:00:00"))]
+    weekly.run("2026-10-12T00:00:00", DSN, client=FakeClient(rows))
+    r = q("SELECT status, closure_date, closure_date_basis FROM company_addresses WHERE siret = %s", (T3,))[0]
+    assert r["status"] == "active" and r["closure_date"] is None and r["closure_date_basis"] is None
+    assert q("SELECT count(*) AS n FROM company_change_history WHERE change_type = 'reopen'")[0]["n"] >= 1
+
+
 def test_hubspot_export_from_view(db, tmp_path):
     with psycopg.connect(DSN, row_factory=dict_row) as conn:
         with conn.cursor(name="c", row_factory=dict_row) as cur:
@@ -205,6 +236,7 @@ def test_hubspot_export_from_view(db, tmp_path):
     assert T4 not in by_siret                                             # non-diffusible never exported
     assert by_siret[T1_HQ]["Siege"].lower() in ("oui", "true", "1", "yes")
     assert by_siret[T2]["Statut etablissement"] == "closed"
+    assert by_siret[T2]["Date cloture"] == "2026-10-08" and by_siret[T1_HQ]["Date cloture"] == ""
     # geography columns the client filters on are now filled from department_reference
     assert by_siret[T1_HQ]["Region"] == "Auvergne-Rhône-Alpes" and by_siret[T1_HQ]["State/Region"] == "Auvergne-Rhône-Alpes"
     assert by_siret[T1_HQ]["Departement"] == "Rhône" and by_siret[T1_HQ]["Departement code"] == "69"

@@ -87,7 +87,31 @@ WHERE a.updated_at >= %(started)s AND NOT EXISTS (
   SELECT 1 FROM company_change_history h WHERE h.establishment_id = a.establishment_id AND h.change_type = 'insert');
 """
 
-COUNT_NEW_COMPANIES = "SELECT count(*) FROM stg_sirene_ul s WHERE s.legal_name IS NOT NULL AND NOT EXISTS (SELECT 1 FROM companies c WHERE c.siren = s.siren)"
+# Closures seen in this batch that SIRENE gave no exact date for: record the date INSEE processed the change
+# (dateDernierTraitement) and mark it 'observed', so an approximate date is never mistaken for a legal one.
+OBSERVED_CLOSURE_ESTABS = """
+UPDATE company_addresses a
+SET closure_date = CASE WHEN e.source_last_processed ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+                        THEN left(e.source_last_processed, 10)::date ELSE current_date END,
+    closure_date_basis = 'observed'
+FROM stg_sirene_etab e
+WHERE e.siret = a.siret AND a.status = 'closed' AND a.closure_date IS NULL
+  AND EXISTS (SELECT 1 FROM company_change_history h
+              WHERE h.batch_id = %(batch)s AND h.change_type = 'close' AND h.establishment_id = a.establishment_id);
+"""
+OBSERVED_CLOSURE_COMPANIES = """
+UPDATE companies c
+SET closure_date = CASE WHEN s.source_last_processed ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+                        THEN left(s.source_last_processed, 10)::date ELSE current_date END,
+    closure_date_basis = 'observed'
+FROM stg_sirene_ul s
+WHERE s.siren = c.siren AND c.status = 'closed' AND c.closure_date IS NULL
+  AND EXISTS (SELECT 1 FROM company_change_history h
+              WHERE h.batch_id = %(batch)s AND h.change_type = 'close' AND h.company_id = c.company_id
+                AND h.establishment_id IS NULL);
+"""
+
+COUNT_NEW_COMPANIES ="SELECT count(*) FROM stg_sirene_ul s WHERE s.legal_name IS NOT NULL AND NOT EXISTS (SELECT 1 FROM companies c WHERE c.siren = s.siren)"
 COUNT_NEW_ESTABS = "SELECT count(*) FROM stg_sirene_etab e WHERE e.is_diffusible AND NOT EXISTS (SELECT 1 FROM company_addresses a WHERE a.siret = e.siret)"
 COUNT_TOTAL_ESTABS = "SELECT count(*) FROM stg_sirene_etab"
 COUNT_CHANGED_ENTITIES = "SELECT count(DISTINCT coalesce(establishment_id::text, 'c'||company_id::text)) FROM company_change_history WHERE batch_id=%(batch)s AND change_type IN ('update','close','reopen')"
@@ -161,6 +185,8 @@ def run(since: str | None, dsn: str, client=None) -> dict:
             cur.execute(UPSERT_COMPANIES)
             cur.execute(UPSERT_ESTABLISHMENTS)
             cur.execute(UPDATE_ARTISAN_FLAG)
+            cur.execute(OBSERVED_CLOSURE_ESTABS, p)
+            cur.execute(OBSERVED_CLOSURE_COMPANIES, p)
             cur.execute(HISTORY_AFTER_INSERT_COMPANIES, p)
             cur.execute(HISTORY_AFTER_INSERT_ESTABS, p)
             cur.execute(COUNT_CHANGED_ENTITIES, p); updated = cur.fetchone()[0]

@@ -64,14 +64,14 @@ Create each with the exact **label** shown (headers auto-map by label), group "F
 | Code NAF | `code_naf` | Single-line text | naf |
 | Libelle NAF | `libelle_naf` | Single-line text | naf_reference.label |
 | Metier | `metier` | Single-line text | naf_reference.trade |
-| Forme juridique | `forme_juridique` | Single-line text | legal_form_label |
+| Forme juridique | `forme_juridique` | Single-line text | legal_form_reference.label (curated subset; unknown code exported as the raw code) |
 | Siege | `est_siege` | Single checkbox (true/false) | is_head_office |
 | Statut etablissement | `statut_etablissement` | Dropdown (active, closed, other) | company_addresses.status |
 | Date creation | `date_creation` | Date picker | creation_date (YYYY-MM-DD) |
-| Date cloture | `date_cloture` | Date picker | closure_date |
+| Date cloture | `date_cloture` | Date picker | closure_date (exact only when closure_date_basis = insee; observed = first seen by the weekly run) |
 | Departement code | `departement_code` | Single-line text | department_code |
-| Departement | `departement_nom` | Single-line text | department_name |
-| Region | `region` | Single-line text | region |
+| Departement | `departement_nom` | Single-line text | department_reference.name (from department_code) |
+| Region | `region` | Single-line text | department_reference.region_name (from department_code) |
 | Categorie taille | `categorie_taille` | Dropdown (TPE, PME, ETI, GE) | size_category |
 | Tranche effectifs | `tranche_effectifs` | Single-line text | employee_range |
 | Annee CA | `annee_ca` | Number | revenue_year |

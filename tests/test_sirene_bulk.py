@@ -72,3 +72,16 @@ def test_csv_reader_filters_active(tmp_path):
         w.writerow(ul(siren="732829320", etatAdministratifUniteLegale="C"))
     assert len(list(read_csv_rows(p, map_unite_legale))) == 2
     assert len(list(read_csv_rows(p, map_unite_legale, only_active=True))) == 1
+
+
+def test_closure_date_only_when_the_period_began_with_the_state_change():
+    closed = dict(etatAdministratifEtablissement="F", dateDebutPeriodeEtablissement="2025-06-30")
+    # period began with the closure: exact date
+    assert map_etablissement(et(changementEtatAdministratifEtablissement="true", **closed))["closure_date"] == "2025-06-30"
+    # period began for another reason (e.g. a later sign change): the date would be wrong, so it stays unknown
+    assert map_etablissement(et(changementEtatAdministratifEtablissement="false", **closed))["closure_date"] is None
+    # bulk stock rows carry neither key: unknown, never guessed
+    assert map_etablissement(et(etatAdministratifEtablissement="F"))["closure_date"] is None
+    # an active establishment never has a closure date
+    assert map_etablissement(et(changementEtatAdministratifEtablissement="true",
+                                dateDebutPeriodeEtablissement="2025-06-30"))["closure_date"] is None

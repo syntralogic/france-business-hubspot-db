@@ -70,6 +70,9 @@ def flatten_etablissement(item: dict) -> dict:
     periods = item.get("periodesEtablissement") or []
     current = next((p for p in periods if p.get("dateFin") is None), periods[0] if periods else {})
     flat.update({k: _to_str(v) for k, v in current.items() if not isinstance(v, (dict, list))})
+    # Keep the period start date under an explicit key: the embedded legal unit is merged next and must never
+    # overwrite it (it is used as the closure date when this period began with the administrative state change).
+    flat["dateDebutPeriodeEtablissement"] = _to_str(current.get("dateDebut"))
     flat.update({k: _to_str(v) for k, v in (item.get("uniteLegale") or {}).items() if not isinstance(v, (dict, list))})
     return flat
 

@@ -25,7 +25,7 @@ UL_STG_COLS = [
 ]
 ETAB_STG_COLS = [
     "siret", "siren", "nic", "is_head_office", "establishment_name", "naf", "status", "creation_date",
-    "street", "complement", "postal_code", "city", "department_code", "is_artisan", "is_diffusible",
+    "closure_date", "street", "complement", "postal_code", "city", "department_code", "is_artisan", "is_diffusible",
     "source_last_processed",
 ]
 
@@ -42,21 +42,30 @@ ON CONFLICT (siren) DO UPDATE SET
   legal_form_code = EXCLUDED.legal_form_code, main_naf = EXCLUDED.main_naf,
   is_sole_proprietor = EXCLUDED.is_sole_proprietor, employee_range = EXCLUDED.employee_range,
   size_category = EXCLUDED.size_category, status = EXCLUDED.status,
-  creation_date = EXCLUDED.creation_date, is_diffusible = EXCLUDED.is_diffusible, updated_at = now()
+  creation_date = EXCLUDED.creation_date, is_diffusible = EXCLUDED.is_diffusible,
+  -- a closure date is kept while the company stays closed and cleared if it is reopened
+  closure_date = CASE WHEN EXCLUDED.status = 'closed' THEN companies.closure_date END,
+  closure_date_basis = CASE WHEN EXCLUDED.status = 'closed' THEN companies.closure_date_basis END,
+  updated_at = now()
 WHERE (companies.legal_name, companies.trading_name, companies.legal_form_code, companies.main_naf,
        companies.is_sole_proprietor, companies.employee_range, companies.size_category,
-       companies.status, companies.creation_date, companies.is_diffusible)
+       companies.status, companies.creation_date, companies.is_diffusible, companies.closure_date)
    IS DISTINCT FROM
       (EXCLUDED.legal_name, EXCLUDED.trading_name, EXCLUDED.legal_form_code, EXCLUDED.main_naf,
        EXCLUDED.is_sole_proprietor, EXCLUDED.employee_range, EXCLUDED.size_category,
-       EXCLUDED.status, EXCLUDED.creation_date, EXCLUDED.is_diffusible);
+       EXCLUDED.status, EXCLUDED.creation_date, EXCLUDED.is_diffusible,
+       CASE WHEN EXCLUDED.status = 'closed' THEN companies.closure_date END);
 """
 
 UPSERT_ESTABLISHMENTS = """
 INSERT INTO company_addresses (company_id, siret, nic, is_head_office, establishment_name, naf, status,
-                               creation_date, street, complement, postal_code, city, department_code, source_id)
+                               creation_date, closure_date, closure_date_basis, street, complement, postal_code,
+                               city, department_code, source_id)
 SELECT c.company_id, e.siret, e.nic, COALESCE(e.is_head_office, FALSE), e.establishment_name, e.naf,
-       COALESCE(e.status, 'active'), e.creation_date, e.street, e.complement, e.postal_code, e.city,
+       COALESCE(e.status, 'active'), e.creation_date,
+       CASE WHEN e.status = 'closed' THEN e.closure_date END,
+       CASE WHEN e.status = 'closed' AND e.closure_date IS NOT NULL THEN 'insee' END,
+       e.street, e.complement, e.postal_code, e.city,
        e.department_code, (SELECT source_id FROM data_sources WHERE code = 'sirene')
 FROM stg_sirene_etab e
 JOIN companies c ON c.siren = e.siren
@@ -65,13 +74,23 @@ ON CONFLICT (siret) DO UPDATE SET
   is_head_office = EXCLUDED.is_head_office, establishment_name = EXCLUDED.establishment_name,
   naf = EXCLUDED.naf, status = EXCLUDED.status, street = EXCLUDED.street,
   complement = EXCLUDED.complement, postal_code = EXCLUDED.postal_code, city = EXCLUDED.city,
-  department_code = EXCLUDED.department_code, updated_at = now()
+  department_code = EXCLUDED.department_code,
+  -- exact INSEE date wins; otherwise keep what we already hold while closed; cleared if reopened
+  closure_date = CASE WHEN EXCLUDED.status = 'closed'
+                      THEN COALESCE(EXCLUDED.closure_date, company_addresses.closure_date) END,
+  closure_date_basis = CASE WHEN EXCLUDED.status = 'closed'
+                            THEN CASE WHEN EXCLUDED.closure_date IS NOT NULL THEN 'insee'
+                                      ELSE company_addresses.closure_date_basis END END,
+  updated_at = now()
 WHERE (company_addresses.is_head_office, company_addresses.establishment_name, company_addresses.naf,
        company_addresses.status, company_addresses.street, company_addresses.complement,
-       company_addresses.postal_code, company_addresses.city, company_addresses.department_code)
+       company_addresses.postal_code, company_addresses.city, company_addresses.department_code,
+       company_addresses.closure_date)
    IS DISTINCT FROM
       (EXCLUDED.is_head_office, EXCLUDED.establishment_name, EXCLUDED.naf, EXCLUDED.status,
-       EXCLUDED.street, EXCLUDED.complement, EXCLUDED.postal_code, EXCLUDED.city, EXCLUDED.department_code);
+       EXCLUDED.street, EXCLUDED.complement, EXCLUDED.postal_code, EXCLUDED.city, EXCLUDED.department_code,
+       CASE WHEN EXCLUDED.status = 'closed'
+            THEN COALESCE(EXCLUDED.closure_date, company_addresses.closure_date) END);
 """
 
 SET_WATERMARK = """

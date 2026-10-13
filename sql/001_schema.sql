@@ -46,6 +46,8 @@ CREATE TABLE companies (
   status             TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','closed','dissolved','other')),
   creation_date      DATE,
   closure_date       DATE,
+  -- 'insee' = exact date carried by SIRENE; 'observed' = date the weekly run first saw the closure
+  closure_date_basis TEXT CHECK (closure_date_basis IN ('insee','observed')),
   is_diffusible      BOOLEAN NOT NULL DEFAULT TRUE,
   primary_source_id  SMALLINT REFERENCES data_sources(source_id),
   confidence_score   NUMERIC(4,3) CHECK (confidence_score BETWEEN 0 AND 1),
@@ -73,6 +75,7 @@ CREATE TABLE company_addresses (
   status               TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','closed','other')),
   creation_date        DATE,
   closure_date         DATE,
+  closure_date_basis   TEXT CHECK (closure_date_basis IN ('insee','observed')),
   street               TEXT,
   complement           TEXT,
   postal_code          CHAR(5) CHECK (postal_code IS NULL OR postal_code ~ '^[0-9]{2}[0-9AB][0-9]{2}$'),

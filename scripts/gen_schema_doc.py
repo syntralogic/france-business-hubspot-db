@@ -1,7 +1,8 @@
 """Generate the constraint/index part of docs/04a-relational-schema.md from a live PostgreSQL catalog.
 
     createdb fbdb_doc && psql fbdb_doc -f sql/000_reference_data.sql -f sql/001_schema.sql -f sql/002_staging.sql \
-        -f sql/003_pipeline_state.sql -f sql/004_export_view.sql -f sql/005_directors_enrichment.sql
+        -f sql/003_pipeline_state.sql -f sql/004_export_view.sql -f sql/005_directors_enrichment.sql \
+        -f sql/006_closure_date.sql
     python scripts/gen_schema_doc.py postgresql://user@localhost/fbdb_doc > /tmp/schema_generated.md
 
 Reading the catalog (instead of retyping the DDL) keeps the document identical to what PostgreSQL really enforces.

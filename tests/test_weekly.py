@@ -43,3 +43,14 @@ def test_report_contains_all_required_counts():
     r = build_report(stats, date(2026, 10, 13))
     for needle in ("2026-10-13", "Added", "Updated", "Closed", "Unchanged", "review", "2026-10-08T14:22:10"):
         assert needle in r
+
+
+def test_flatten_exposes_closure_date_and_ignores_embedded_legal_unit_dates():
+    item = {**API_ITEM, "uniteLegale": {**API_ITEM["uniteLegale"], "dateDebut": "1999-01-01"},
+            "periodesEtablissement": [
+                {"dateFin": "2025-06-29", "dateDebut": "2020-01-01", "etatAdministratifEtablissement": "A"},
+                {"dateFin": None, "dateDebut": "2025-06-30", "etatAdministratifEtablissement": "F",
+                 "changementEtatAdministratifEtablissement": True},
+            ]}
+    et = map_etablissement(flatten_etablissement(item))
+    assert et["status"] == "closed" and et["closure_date"] == "2025-06-30"   # not the legal unit's 1999 date

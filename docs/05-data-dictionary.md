@@ -29,7 +29,8 @@ Legend: **R** = required, **O** = optional. Status vocabulary for contact-like f
 | size_category | TEXT | O | TPE/PME/ETI/GE | TPE | enum |
 | status | TEXT | R | active/closed/dissolved/other | active | enum |
 | creation_date | DATE | O | Legal creation | 2012-03-01 | <= today |
-| closure_date | DATE | O | Cessation | 2024-06-30 | >= creation_date |
+| closure_date | DATE | O | Cessation. Exact only when `closure_date_basis = 'insee'` | 2024-06-30 | >= creation_date; NULL while active |
+| closure_date_basis | TEXT | O | `insee` = exact date carried by SIRENE; `observed` = date the weekly run first saw the closure (INSEE processing date); NULL = unknown (e.g. closed before the first load) | observed | enum; set only with closure_date |
 | is_diffusible | BOOL | R | False = must not be exported | true | |
 | confidence_score | NUMERIC(4,3) | O | 0-1 record reliability | 0.912 | 0..1 |
 | dup_status | TEXT | R | unique / merged / review | unique | enum |
@@ -52,11 +53,12 @@ Indexes: PK, UNIQUE(siren), (status), (main_naf), GIN trigram on legal_name.
 | establishment_name | TEXT | O | Local trade name | Boulangerie Dupont Lyon 3 | |
 | naf | TEXT | O | Local NAF | 10.71C | regex |
 | status | TEXT | R | active/closed/other | active | enum |
+| closure_date / closure_date_basis | DATE / TEXT | O | Establishment closure. `insee` = exact date from the SIRENE API period; `observed` = date the weekly run first saw it; NULL = unknown | 2025-06-30 / insee | NULL while active; cleared on reopening |
 | street, complement | TEXT | O | Address lines | 12 RUE DE LA PAIX | |
 | postal_code | CHAR(5) | O | French postal code | 69003 | 5 chars, Corsica 2A/2B |
 | city | TEXT | O | Commune | LYON 3EME | |
-| department_code / department_name | TEXT | O | Department | 69 / Rhone | derived from postal code/INSEE commune |
-| region | TEXT | O | Region | Auvergne-Rhone-Alpes | |
+| department_code / department_name | TEXT | O | Department. The code is derived from the postal code; the export view takes the name from `department_reference` (101 official departments) | 69 / Rhône | overseas collectivities (975, 98x) have no department name |
+| region | TEXT | O | Region. The export view takes it from `department_reference` | Auvergne-Rhône-Alpes | |
 | country | TEXT | R | Default France | France | |
 | latitude / longitude | NUMERIC(9,6) | O | WGS84 | 45.7578 / 4.8320 | lat 41..52, lon -6..10 (metropolitan) |
 | standardized_address | TEXT | O | BAN-normalized single line | 12 Rue de la Paix 69003 Lyon | |

@@ -25,6 +25,7 @@ CREATE UNLOGGED TABLE IF NOT EXISTS stg_sirene_etab (
   naf                   TEXT,
   status                TEXT,
   creation_date         DATE,
+  closure_date          DATE,           -- exact date only when the source carries it, else NULL
   street                TEXT,
   complement            TEXT,
   postal_code           CHAR(5),
