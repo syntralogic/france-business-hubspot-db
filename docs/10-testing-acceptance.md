@@ -24,3 +24,6 @@
 
 ## Live smoke test (run once with real network and the INSEE key)
 `PYTHONPATH=src python scripts/live_smoke.py` checks, without writing to the database: one SIREN on the INSEE API, a pull of 100 establishments flattened with the production mapper, and the Annuaire client on two known SIRENs plus one unknown. It prints PASS/FAIL per check and exits 1 on any failure. Record the result in `docs/13-verification-log.md`. Not yet run against the live APIs (no INSEE key and no outbound access in the build environment).
+
+## Full-SIRENE load test
+`scripts/load_test.sh [WORKDIR]` on a server (throw-away database, ~25 GB free): downloads the two stock files, loads a 100k-row sample, then the full active set, runs the weekly delta twice (second run must add 0 history rows) and the export, logging duration and peak memory per step to `reports/load_test_<date>.log`. Not yet run (needs INSEE key, internet and PostgreSQL).
