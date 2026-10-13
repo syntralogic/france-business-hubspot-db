@@ -8,7 +8,7 @@
 | SIRENE mapping | active/closed, sole proprietor, non-diffusible, artisan flag, Corsica/DOM departments, CSV streaming |
 | API flattening | current period selection, JSON booleans, reuse of bulk mappers |
 | HubSpot export | rejection/warning codes, duplicate SIRET, shared domain, UTF-8 no BOM, control chars, file split constant |
-| Not yet automated | PostgreSQL SQL (schema, upserts, history, view): needs an integration test with a real PostgreSQL (planned in Phase 2/6) |
+| Automated (needs TEST_DATABASE_URL) | `tests/integration`: schema, bulk upsert, weekly delta, change history, closures, idempotent re-run, export view, run against PostgreSQL 16 on 13 Oct 2026 |
 
 ## Acceptance criteria (measured on the delivered dataset)
 1. 100% of exported rows have a valid SIRET and SIREN (Luhn) and SIRET starts with SIREN.
