@@ -20,7 +20,7 @@ france-business-hubspot-db/
 ├── data/, reports/            local outputs, git-ignored
 └── .env.example               variable names only; real values stay in .env (git-ignored)
 ```
-Not implemented yet (documented as future work, no stub code): Pappers financials, ADEME RGE certifications, licensed phone/email, Google ratings, BAN geocoding.
+Not implemented yet (documented as future work, no stub code): Pappers financials, ADEME RGE certifications, Google ratings, BAN geocoding.
 
 ## Key implementation 1: normalization for matching (`transform/normalize.py`)
 Names are compared after removing accents, punctuation and legal-form words, so `Boulangerie Dupont S.A.R.L.` and `BOULANGERIE DUPONT` meet:

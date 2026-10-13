@@ -33,7 +33,7 @@ flowchart TD
 - **Retries**: exponential backoff (2 s to 120 s, 6 attempts) on HTTP 429/5xx and network errors; a failed batch is marked `failed` in `import_export_batches`, rolled back, and the watermark is not advanced.
 - **Weekly report** (`reports/weekly_YYYY-MM-DD.md`): read, added, updated, closed, unchanged, review.
 - **Director changes** are implemented in `fbdb.enrich.directors` (run by `scripts/run_weekly.sh` after the SIRENE delta): current directors come from the Annuaire des Entreprises API, additions and departures are written to `company_change_history` (`insert` / `delete`, old and new value) and the run is logged in `import_export_batches` (`batch_type = 'enrich'`). Each run checks at most `--limit` companies (never-checked first, then oldest), and re-checks a company after `--refresh-days` (default 30), so the weekly load stays bounded.
-- **Phone/email changes** depend on a licensed contact source that is not yet selected; they will use the same history table once a provider is contracted.
+- **Phone/email changes** depend on a licensed contact feed: the loader (`fbdb.enrich.licensed_contacts`) is built and records new values in the same history table, but no provider is selected or contracted yet.
 
 ## Operating requirements
 - Typical delta: ~100k-300k changed establishments/week (to be measured on real data); diff + upsert should take minutes on PostgreSQL, the API fetch dominates (1,000 rows per call, subject to INSEE quota).

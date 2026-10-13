@@ -14,7 +14,7 @@ All figures are **estimates** to be refined after Phase 1. Third-party prices ar
 | 7 Testing, documentation, handover | Acceptance audit, runbooks, training | 5-7 |
 | **Total** | | **38-57 days (about 8-12 weeks)** |
 
-Already in this repository: schema, SIRENE loader, weekly delta, normalization, dedup/resolve, HubSpot export and validation, and directors enrichment (Annuaire), with tests; the SQL is integration-tested on PostgreSQL 16. Still untested against real INSEE data and a live INSEE API key (Phase 2/3), and the Annuaire client has not been run against the live API from CI. Not built yet: licensed phone/email, Pappers financials, ADEME RGE certifications, Google ratings, BAN geocoding.
+Already in this repository: schema, SIRENE loader, weekly delta, normalization, dedup/resolve, HubSpot export and validation, directors enrichment (Annuaire) and the licensed phone/email file loader (usable only once a provider contract and feed exist), with tests; the SQL is integration-tested on PostgreSQL 16. Still untested against real INSEE data and a live INSEE API key (Phase 2/3), and the Annuaire client has not been run against the live API from CI. Not built yet: Pappers financials, ADEME RGE certifications, Google ratings, BAN geocoding.
 
 ## One-time costs (pipeline build)
 Development = effort days x agreed day rate (e.g. 38-57 days). Add the one-time cost of any data purchase (initial licence fees or bulk enrichment credits).
