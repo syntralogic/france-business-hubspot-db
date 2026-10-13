@@ -30,6 +30,7 @@ SELECT
   ws.value AS website, li.value AS linkedin,
   fin.revenue_eur AS revenue, fin.fiscal_year AS revenue_year, fin.employees AS employees,
   certs.certifications,
+  rge.rge_labels, rge.rge_until,
   dir.first_name AS director_first, dir.last_name AS director_last, dir.role AS director_role,
   src.code AS primary_source,
   c.last_verified_at, c.confidence_score AS confidence, c.freshness_status AS freshness,
@@ -68,6 +69,11 @@ LEFT JOIN LATERAL (
 LEFT JOIN LATERAL (
   SELECT string_agg(DISTINCT x.cert_type, '; ' ORDER BY x.cert_type) AS certifications FROM company_certifications x
   WHERE x.company_id = c.company_id AND (x.valid_to IS NULL OR x.valid_to >= current_date)) certs ON TRUE
+LEFT JOIN LATERAL (   -- ADEME RGE: this establishment only, certificates still valid today
+  SELECT string_agg(DISTINCT x.cert_label, '; ' ORDER BY x.cert_label) AS rge_labels, max(x.valid_to) AS rge_until
+  FROM company_certifications x
+  WHERE x.establishment_id = a.establishment_id AND x.cert_type = 'RGE'
+    AND (x.valid_to IS NULL OR x.valid_to >= current_date)) rge ON TRUE
 LEFT JOIN LATERAL (
   SELECT d.first_name, d.last_name, d.role FROM company_directors d
   WHERE d.company_id = c.company_id AND d.is_active ORDER BY d.start_date DESC NULLS LAST LIMIT 1) dir ON TRUE

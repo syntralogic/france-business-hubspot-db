@@ -57,7 +57,7 @@ RECORDS = [
          street="21 RUE DES ORFEVRES", postal_code="67000", city="STRASBOURG", department_code="67", department_name="Bas-Rhin",
          region="Grand Est", naf="43.21A", naf_label="Travaux d'installation electrique", trade="Electricien",
          legal_form="SAS", is_head_office=True, creation_date="2010-01-10", phone="03 53 01 00 05", phone_status="sourced",
-         contact_source="licensed_contacts", certifications="RGE (exemple)", google_rating=4.6, google_reviews=87,
+         contact_source="licensed_contacts", certifications="RGE", rge_labels="QualiPV (exemple fictif)", rge_until="2027-06-30", google_rating=4.6, google_reviews=87,
          google_url="https://maps.google.com/?cid=0000000000000000000", employee_range="6 a 9 salaries",
          size_category="TPE", confidence=0.9, director_first="Anna", director_last="Muller", director_role="President"),
 ]

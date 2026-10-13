@@ -76,6 +76,8 @@ Create each with the exact **label** shown (headers auto-map by label), group "F
 | Tranche effectifs | `tranche_effectifs` | Single-line text | employee_range |
 | Annee CA | `annee_ca` | Number | revenue_year |
 | Certifications | `certifications` | Single-line text | company_certifications (active, joined with ;) |
+| RGE qualifications | `rge_qualifications` | Single-line text (create in HubSpot) | company_certifications cert_type RGE, this SIRET, still valid (ADEME) |
+| RGE valide jusqu au | `rge_valide_jusqua` | Date or single-line text (create in HubSpot) | latest valid_to of those RGE certificates |
 | Dirigeant prenom | `dirigeant_prenom` | Single-line text | company_directors.first_name |
 | Dirigeant nom | `dirigeant_nom` | Single-line text | company_directors.last_name |
 | Dirigeant fonction | `dirigeant_fonction` | Single-line text | company_directors.role |
