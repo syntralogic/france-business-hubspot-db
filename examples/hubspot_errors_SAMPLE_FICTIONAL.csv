@@ -1,0 +1,2 @@
+row_number,siret,id_interne,severity,code,field,message,value
+2,90000001900027,2,warning,DOMAIN_SHARED,domain,Domain already used by another row; domain blanked to avoid merge,fournil-fictif.example
