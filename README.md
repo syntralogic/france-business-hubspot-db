@@ -6,8 +6,7 @@ Pipeline that builds a deduplicated, enriched database of French businesses and 
 ## Status
 Built incrementally, one commit per step. Docs in `docs/` (01-12 follow the requested response order).
 Implemented and unit-tested (40 tests): normalization, dedup, conflict resolution, SIRENE bulk + API delta mapping,
-HubSpot export with validation. SQL and live-API paths are written but still need integration testing against a real
-PostgreSQL and INSEE API key (see docs/10-testing-acceptance.md). Source and HubSpot facts were re-verified on 13 Oct 2026: see docs/13-verification-log.md.
+HubSpot export with validation. SQL is integration-tested against a real PostgreSQL 16 (tests/integration, 4 tests: bulk load, weekly delta, change history, closures, export). The live INSEE API path still needs a real INSEE API key (see docs/10-testing-acceptance.md). Source and HubSpot facts were re-verified on 13 Oct 2026: see docs/13-verification-log.md.
 
 ## Quick start
 ```
@@ -18,6 +17,7 @@ python -m fbdb.load.sirene_loader --ul StockUniteLegale_utf8.csv --etab StockEta
 python -m fbdb.load.weekly            # weekly delta (or scripts/run_weekly.sh from cron)
 python -m fbdb.export.run_export      # writes HubSpot CSV + error report to data/exports/
 pytest
+TEST_DATABASE_URL=postgresql://user:pw@localhost/fbdb_test pytest tests/integration -q   # real PostgreSQL, throw-away DB (drops schema public)
 ```
 
 ## Planned stack

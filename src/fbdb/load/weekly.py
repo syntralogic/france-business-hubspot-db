@@ -123,8 +123,8 @@ def build_report(stats: dict, run_date: date) -> str:
     return "\n".join(lines) + "\n"
 
 
-def run(since: str | None, dsn: str) -> dict:
-    client = SireneApiClient()
+def run(since: str | None, dsn: str, client=None) -> dict:
+    client = client or SireneApiClient()
     with psycopg.connect(dsn) as conn, conn.cursor() as cur:
         if since is None:
             cur.execute("SELECT value FROM pipeline_state WHERE key=%s", (WATERMARK_KEY,))
