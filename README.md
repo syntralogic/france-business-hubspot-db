@@ -12,7 +12,7 @@ directors enrichment (Annuaire des Entreprises), HubSpot export with validation.
 ```
 python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
 cp .env.example .env            # fill DATABASE_URL and INSEE_API_KEY
-psql $DATABASE_URL -f sql/001_schema.sql -f sql/002_staging.sql -f sql/003_pipeline_state.sql -f sql/004_export_view.sql -f sql/005_directors_enrichment.sql
+psql $DATABASE_URL -f sql/000_reference_data.sql -f sql/001_schema.sql -f sql/002_staging.sql -f sql/003_pipeline_state.sql -f sql/004_export_view.sql -f sql/005_directors_enrichment.sql
 python -m fbdb.load.sirene_loader --ul StockUniteLegale_utf8.csv --etab StockEtablissement_utf8.csv --only-active
 python -m fbdb.load.weekly            # weekly delta (or scripts/run_weekly.sh from cron)
 python -m fbdb.enrich.directors --limit 5000   # directors refresh (also run by run_weekly.sh)

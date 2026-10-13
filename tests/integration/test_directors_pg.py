@@ -35,8 +35,8 @@ class FakeAnnuaire:
 def db():
     with psycopg.connect(DSN, autocommit=True) as conn:
         conn.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
-        for f in ("001_schema.sql", "002_staging.sql", "003_pipeline_state.sql", "004_export_view.sql",
-                  "005_directors_enrichment.sql"):
+        for f in ("000_reference_data.sql", "001_schema.sql", "002_staging.sql", "003_pipeline_state.sql",
+                  "004_export_view.sql", "005_directors_enrichment.sql"):
             conn.execute((SQL_DIR / f).read_text(encoding="utf-8"))
         rows = [  # siren, name, sole proprietor, diffusible, status
             (A, "ALPHA SARL", False, True, "active"),

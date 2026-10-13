@@ -1,6 +1,6 @@
 # 6. Detailed Relational Schema
 
-DDL: `sql/001_schema.sql` (core, 12 tables), `002_staging.sql`, `003_pipeline_state.sql`, `004_export_view.sql`, `005_directors_enrichment.sql`.
+DDL: `sql/000_reference_data.sql` (departments/regions, employee ranges, legal forms: lookup tables used by the export view), `sql/001_schema.sql` (core, 12 tables), `002_staging.sql`, `003_pipeline_state.sql`, `004_export_view.sql`, `005_directors_enrichment.sql`.
 Column-by-column description (type, required/optional, meaning, example, validation) is in
 [05-data-dictionary.md](05-data-dictionary.md). This document adds what the dictionary does not: keys, constraints, indexes and how
 identifiers are handled. The constraint and index lists below are generated from the live PostgreSQL catalog

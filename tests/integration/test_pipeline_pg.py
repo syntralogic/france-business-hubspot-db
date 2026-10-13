@@ -104,7 +104,8 @@ def flat(ul_row, et_row):
 def db(tmp_path_factory):
     with psycopg.connect(DSN, autocommit=True) as conn:
         conn.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
-        for f in ("001_schema.sql", "002_staging.sql", "003_pipeline_state.sql", "004_export_view.sql"):
+        for f in ("000_reference_data.sql", "001_schema.sql", "002_staging.sql", "003_pipeline_state.sql",
+                  "004_export_view.sql"):
             conn.execute((SQL_DIR / f).read_text(encoding="utf-8"))
     tmp = tmp_path_factory.mktemp("sirene")
     write_csv(tmp / "ul.csv", UL_COLUMNS, UL_ROWS)
@@ -166,6 +167,32 @@ def test_weekly_delta_records_changes_closures_and_new_records(db):
     assert q("SELECT count(*) AS n FROM company_addresses")[0]["n"] == 5
 
 
+def test_reference_data_seeded(db):
+    assert q("SELECT count(*) AS n FROM department_reference")[0]["n"] == 101      # 96 metropolitan + 5 overseas
+    assert q("SELECT count(DISTINCT region_code) AS n FROM department_reference")[0]["n"] == 18
+    assert q("SELECT count(*) AS n FROM employee_range_reference")[0]["n"] == 16   # INSEE trancheEffectifs
+    corsica = q("SELECT code, region_name FROM department_reference WHERE code IN ('2A','2B') ORDER BY code")
+    assert [r["region_name"] for r in corsica] == ["Corse", "Corse"]
+    assert q("SELECT region_name FROM department_reference WHERE code = '974'")[0]["region_name"] == "La Réunion"
+
+
+def test_view_fills_department_region_and_legal_form(db):
+    v = {r["siret"]: r for r in q("SELECT * FROM v_hubspot_companies")}
+    assert v[T1_HQ]["department_name"] == "Rhône" and v[T1_HQ]["region"] == "Auvergne-Rhône-Alpes"
+    assert v[T2]["department_name"] == "Bouches-du-Rhône" and v[T2]["region"] == "Provence-Alpes-Côte d'Azur"
+    assert v[T3]["department_name"] == "Loire"
+    assert v[T1_HQ]["legal_form"].startswith("SARL")          # 5499 is in the curated subset
+
+
+def test_view_unknown_codes_fall_back_to_raw_code_not_a_guess(db):
+    with psycopg.connect(DSN, autocommit=True) as conn:
+        conn.execute("UPDATE companies SET legal_form_code = '9999', employee_range = '99' WHERE siren = %s", (S3,))
+    v = {r["siret"]: r for r in q("SELECT * FROM v_hubspot_companies")}
+    assert v[T3]["legal_form"] == "9999" and v[T3]["employee_range"] == "99"
+    with psycopg.connect(DSN, autocommit=True) as conn:
+        conn.execute("UPDATE companies SET legal_form_code = '5499', employee_range = NULL WHERE siren = %s", (S3,))
+
+
 def test_hubspot_export_from_view(db, tmp_path):
     with psycopg.connect(DSN, row_factory=dict_row) as conn:
         with conn.cursor(name="c", row_factory=dict_row) as cur:
@@ -178,4 +205,8 @@ def test_hubspot_export_from_view(db, tmp_path):
     assert T4 not in by_siret                                             # non-diffusible never exported
     assert by_siret[T1_HQ]["Siege"].lower() in ("oui", "true", "1", "yes")
     assert by_siret[T2]["Statut etablissement"] == "closed"
+    # geography columns the client filters on are now filled from department_reference
+    assert by_siret[T1_HQ]["Region"] == "Auvergne-Rhône-Alpes" and by_siret[T1_HQ]["State/Region"] == "Auvergne-Rhône-Alpes"
+    assert by_siret[T1_HQ]["Departement"] == "Rhône" and by_siret[T1_HQ]["Departement code"] == "69"
+    assert by_siret[T1_HQ]["Forme juridique"].startswith("SARL")
     assert "CAFE DE L'ETOILE MULLER" in {r["Company name"] for r in rows} or any("ETOILE" in r["Company name"] for r in rows)

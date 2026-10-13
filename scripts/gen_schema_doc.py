@@ -1,7 +1,7 @@
 """Generate the constraint/index part of docs/04a-relational-schema.md from a live PostgreSQL catalog.
 
-    createdb fbdb_doc && psql fbdb_doc -f sql/001_schema.sql -f sql/002_staging.sql -f sql/003_pipeline_state.sql \
-        -f sql/004_export_view.sql -f sql/005_directors_enrichment.sql
+    createdb fbdb_doc && psql fbdb_doc -f sql/000_reference_data.sql -f sql/001_schema.sql -f sql/002_staging.sql \
+        -f sql/003_pipeline_state.sql -f sql/004_export_view.sql -f sql/005_directors_enrichment.sql
     python scripts/gen_schema_doc.py postgresql://user@localhost/fbdb_doc > /tmp/schema_generated.md
 
 Reading the catalog (instead of retyping the DDL) keeps the document identical to what PostgreSQL really enforces.
@@ -15,7 +15,8 @@ CORE = [
     "company_certifications", "company_reviews", "data_sources", "company_source_records",
     "company_change_history", "import_export_batches", "data_quality_issues",
 ]
-SUPPORT = ["stg_sirene_ul", "stg_sirene_etab", "pipeline_state", "naf_reference"]
+SUPPORT = ["stg_sirene_ul", "stg_sirene_etab", "pipeline_state", "naf_reference", "department_reference",
+           "employee_range_reference", "legal_form_reference"]
 
 
 def short(defn: str) -> str:

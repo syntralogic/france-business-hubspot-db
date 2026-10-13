@@ -11,13 +11,18 @@ CREATE OR REPLACE VIEW v_hubspot_companies AS
 SELECT
   a.establishment_id            AS internal_id,
   a.siret, c.siren, c.legal_name, c.trading_name, a.establishment_name,
-  a.street, a.complement, a.postal_code, a.city, a.department_code, a.department_name, a.region, a.country,
+  a.street, a.complement, a.postal_code, a.city, a.department_code,
+  COALESCE(a.department_name, dr.name)        AS department_name,   -- department_reference (sql/000)
+  COALESCE(a.region, dr.region_name)          AS region,
+  a.country,
   COALESCE(a.naf, c.main_naf)   AS naf,
   COALESCE(nr.label, c.industry_label) AS naf_label,
   nr.trade                      AS trade,
-  c.legal_form_label            AS legal_form,
+  -- known code -> label; unknown code -> the raw code (never a guessed label)
+  COALESCE(c.legal_form_label, lf.label, c.legal_form_code) AS legal_form,
   a.is_head_office, a.status, a.creation_date, a.closure_date,
-  c.size_category, c.employee_range,
+  c.size_category,
+  COALESCE(er.label, c.employee_range)        AS employee_range,
   c.is_diffusible AS is_diffusible,
   ph.value_normalized AS phone,   ph.value_status AS phone_status,
   em.value_normalized AS email,   em.value_status AS email_status,
@@ -33,6 +38,9 @@ FROM company_addresses a
 JOIN companies c ON c.company_id = a.company_id
 LEFT JOIN data_sources src ON src.source_id = c.primary_source_id
 LEFT JOIN naf_reference nr ON nr.naf = COALESCE(a.naf, c.main_naf)
+LEFT JOIN department_reference dr ON dr.code = a.department_code
+LEFT JOIN legal_form_reference lf ON lf.code = c.legal_form_code
+LEFT JOIN employee_range_reference er ON er.code = c.employee_range
 LEFT JOIN LATERAL (
   SELECT k.value_normalized, k.value_status, s.code AS source_code FROM company_contacts k
   LEFT JOIN data_sources s ON s.source_id = k.source_id
