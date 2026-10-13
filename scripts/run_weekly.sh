@@ -11,3 +11,8 @@ python -m fbdb.load.weekly >>"$LOG" 2>&1 || { echo "weekly run FAILED, see $LOG"
 python -m fbdb.enrich.directors --limit "${DIRECTORS_PER_RUN:-5000}" >>"$LOG" 2>&1 || { echo "directors enrichment FAILED, see $LOG" >&2; exit 1; }
 python -m fbdb.enrich.geocode --limit "${GEOCODE_PER_RUN:-200000}" >>"$LOG" 2>&1 || { echo "geocoding FAILED, see $LOG" >&2; exit 1; }
 python -m fbdb.enrich.bodacc --days "${BODACC_DAYS:-8}" >>"$LOG" 2>&1 || { echo "BODACC FAILED, see $LOG" >&2; exit 1; }
+if [ -n "${INPI_USERNAME:-}" ]; then
+  python -m fbdb.enrich.inpi --limit "${INPI_PER_RUN:-500}" >>"$LOG" 2>&1 || { echo "INPI cross-check FAILED, see $LOG" >&2; exit 1; }
+else
+  echo "INPI step skipped (INPI_USERNAME not set)" >>"$LOG"
+fi

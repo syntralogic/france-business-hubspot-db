@@ -15,11 +15,11 @@ run() { psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f "$1"; echo "applied $1"; }
 if [ "$(psql "$DATABASE_URL" -tAc "SELECT to_regclass('public.companies') IS NOT NULL")" = "t" ]; then
   echo "Existing schema detected: upgrading with the idempotent files only."
   files=(sql/000_reference_data.sql sql/002_staging.sql sql/003_pipeline_state.sql sql/004_export_view.sql
-         sql/005_directors_enrichment.sql sql/006_closure_date.sql sql/007_geocoding.sql sql/008_bodacc.sql)
+         sql/005_directors_enrichment.sql sql/006_closure_date.sql sql/007_geocoding.sql sql/008_bodacc.sql sql/009_inpi.sql)
 else
   echo "Empty database: creating the full schema."
   files=(sql/000_reference_data.sql sql/001_schema.sql sql/002_staging.sql sql/003_pipeline_state.sql
-         sql/004_export_view.sql sql/005_directors_enrichment.sql sql/006_closure_date.sql sql/007_geocoding.sql sql/008_bodacc.sql)
+         sql/004_export_view.sql sql/005_directors_enrichment.sql sql/006_closure_date.sql sql/007_geocoding.sql sql/008_bodacc.sql sql/009_inpi.sql)
 fi
 for f in "${files[@]}"; do run "$f"; done
 echo "Schema ready."
