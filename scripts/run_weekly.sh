@@ -21,3 +21,8 @@ if [ -n "${PAPPERS_API_KEY:-}" ]; then
 else
   echo "Pappers step skipped (PAPPERS_API_KEY not set)" >>"$LOG"
 fi
+if [ -n "${GOOGLE_PLACES_API_KEY:-}" ]; then
+  python -m fbdb.enrich.places --limit "${PLACES_PER_RUN:-100}" >>"$LOG" 2>&1 || { echo "Google Places FAILED, see $LOG" >&2; exit 1; }
+else
+  echo "Google Places step skipped (GOOGLE_PLACES_API_KEY not set)" >>"$LOG"
+fi

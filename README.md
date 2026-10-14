@@ -5,8 +5,8 @@ Pipeline that builds a deduplicated, enriched database of French businesses and 
 
 ## Status
 Built incrementally, one commit per step. Start with `docs/00-index.md`: it maps the 16 sections of the client brief to files.
-Implemented and tested (93 tests: 70 unit + 23 against a real PostgreSQL 16): normalization, dedup, conflict resolution, SIRENE bulk + API delta,
-directors enrichment (Annuaire des Entreprises), licensed phone/email file loader (needs a signed provider contract, see docs/14-licensed-contacts.md), HubSpot export with validation. Geocoding, ADEME RGE, BODACC and INPI RNE (Chunk 2 complete) built. Acceptance metrics script built (Chunk 7). Pappers financials built (paid key needed, daily credit cap). Not built yet: Google ratings (see docs/11-timeline-cost.md). The live INSEE API path needs a real INSEE API key, and the Annuaire client should be run once against the live API on the server (see docs/10-testing-acceptance.md and docs/13-verification-log.md). Source and HubSpot facts were re-verified on 13 Oct 2026: see docs/13-verification-log.md.
+Implemented and tested (97 tests: 73 unit + 24 against a real PostgreSQL 16): normalization, dedup, conflict resolution, SIRENE bulk + API delta,
+directors enrichment (Annuaire des Entreprises), licensed phone/email file loader (needs a signed provider contract, see docs/14-licensed-contacts.md), HubSpot export with validation. Geocoding, ADEME RGE, BODACC and INPI RNE (Chunk 2 complete) built. Acceptance metrics script built (Chunk 7). Pappers financials built (paid key needed, daily credit cap). Google Places ratings built (paid key, daily call cap, export keeps ratings out unless licensed). Not built yet: Docker/deploy files, logging, monitoring, alerts (Chunk 6) (see docs/11-timeline-cost.md). The live INSEE API path needs a real INSEE API key, and the Annuaire client should be run once against the live API on the server (see docs/10-testing-acceptance.md and docs/13-verification-log.md). Source and HubSpot facts were re-verified on 13 Oct 2026: see docs/13-verification-log.md.
 
 ## Quick start
 ```
@@ -23,6 +23,7 @@ python -m fbdb.enrich.bodacc --days 8             # BODACC collective procedures
 python -m fbdb.enrich.inpi --limit 500             # INPI RNE cross-check (radiation / director mismatch flags only); needs INPI_USERNAME/INPI_PASSWORD, skipped in run_weekly.sh if unset
 python -m fbdb.enrich.licensed_contacts FEED.csv --contract-ref REF   # licensed phone/email file, on delivery only
 python -m fbdb.enrich.pappers --limit 200          # Pappers revenue/headcount, PAID, hard daily cap PAPPERS_DAILY_CAP (skipped in run_weekly.sh without PAPPERS_API_KEY)
+python -m fbdb.enrich.places --limit 100            # Google Places rating/reviews, PAID, daily cap PLACES_DAILY_CAP, selection rule in the module docstring (skipped in run_weekly.sh without GOOGLE_PLACES_API_KEY)
 python -m fbdb.report.metrics --out reports/metrics   # coverage, per-field fill rates, match rates, gaps vs targets, short client report (client_report.md)
 python -m fbdb.export.run_export      # writes HubSpot CSV + error report to data/exports/
 pytest
