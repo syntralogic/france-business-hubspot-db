@@ -23,4 +23,4 @@ jobs:
       - name: Shell scripts parse
         run: for f in scripts/*.sh; do bash -n "$f"; done
       - name: Docker image builds
-        run: docker build -t fbdb:ci .
+        run: docker build -t fbdb:ci . && docker build -f Dockerfile.render -t fbdb-render:ci .

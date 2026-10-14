@@ -1,0 +1,16 @@
+# Image for the Render background worker (see render.yaml and docs/17-render-deployment.md).
+# Differs from ./Dockerfile: it starts as root only to fix ownership of the persistent disk (Render mounts it root-owned),
+# then drops to the unprivileged user "app" and runs the in-container scheduler.
+FROM python:3.12-slim
+RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client curl unzip ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY requirements.txt constraints.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -c constraints.txt
+COPY pyproject.toml ./
+COPY src ./src
+COPY sql ./sql
+COPY scripts ./scripts
+ENV PYTHONPATH=/app/src PYTHONUNBUFFERED=1
+RUN useradd --uid 1000 --create-home app && chmod +x scripts/*.sh
+CMD ["bash", "scripts/render_entry.sh"]

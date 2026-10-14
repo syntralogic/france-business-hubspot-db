@@ -1,0 +1,57 @@
+# Render Blueprint: PostgreSQL + background worker with a persistent disk. See docs/17-render-deployment.md.
+# Validate: render blueprints validate   (schema: https://render.com/schema/render.yaml.json)
+# Region frankfurt (EU). Database and worker MUST be in the same region for the internal connection string.
+databases:
+  - name: fbdb-postgres
+    databaseName: fbdb
+    user: fbdb
+    region: frankfurt
+    plan: basic-4gb            # explicit PAID plan: never "free" (free databases are deleted after 30 days). Raise for the full load.
+    diskSizeGB: 50             # 1 or a multiple of 5
+    storageAutoscalingEnabled: true
+    postgresMajorVersion: "16"
+    ipAllowList: []            # no external access: only services in the same region reach it
+
+services:
+  - type: worker
+    name: fbdb-pipeline
+    runtime: docker
+    region: frankfurt
+    plan: standard             # 2 GB RAM / 1 CPU: enough for weekly runs; use a bigger plan for the first full load if it is slow
+    dockerfilePath: ./Dockerfile.render
+    dockerContext: .
+    autoDeployTrigger: "off"   # deploy by hand (Manual Deploy), never during the Monday run: a deploy stops the running job
+    maxShutdownDelaySeconds: 300
+    disk:
+      name: fbdb-data
+      mountPath: /app/data     # raw SIRENE files, staging, HubSpot exports, run logs
+      sizeGB: 60
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fbdb-postgres
+          property: connectionString
+      - key: INSEE_API_KEY
+        sync: false            # Render asks for the value when the Blueprint is created
+      - key: INITIAL_LOAD
+        value: "1"             # one-time load of the SIRENE stock; skipped automatically once done
+      - key: NAF_CSV_URL
+        sync: false            # URL of naf_rev2.csv (see docs/17), or leave empty and upload the file by SSH
+      - key: LEGAL_FORMS_CSV_URL
+        sync: false
+      - key: WEEKLY_DAY
+        value: mon
+      - key: WEEKLY_TIME
+        value: "03:00"         # UTC
+      - key: EXPORT_AFTER_WEEKLY
+        value: "1"
+      - key: EXPORT_INCLUDE_CLOSED
+        value: "0"
+      - key: EXPORT_SIRET_IS_IMPORT_KEY
+        value: "0"
+      - key: STEP_TIMEOUT_SECONDS
+        value: "21600"
+      - key: SLACK_WEBHOOK_URL
+        sync: false
+      - key: HEALTHCHECK_PING_URL
+        sync: false
