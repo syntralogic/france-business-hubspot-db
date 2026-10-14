@@ -27,3 +27,9 @@
 
 ## Full-SIRENE load test
 `scripts/load_test.sh [WORKDIR]` on a server (throw-away database, ~25 GB free): downloads the two stock files, loads a 100k-row sample, then the full active set, runs the weekly delta twice (second run must add 0 history rows) and the export, logging duration and peak memory per step to `reports/load_test_<date>.log`. Not yet run (needs INSEE key, internet and PostgreSQL).
+
+## Acceptance metrics script (Chunk 7)
+`python -m fbdb.report.metrics` measures on the export view: coverage (exportable / active establishments, and vs the volume target),
+fill rate per export column, and match rates (geocoding, directors, RGE). Targets are proposed defaults in `DEFAULT_TARGETS`
+(registry-grade fields gated; phone, email, revenue, directors, ratings report-only, as agreed in the brief). Override with `--targets file.json`.
+Outputs: `metrics.json`, `fill_rates.csv`, `client_report.md` in `reports/metrics/`. Run it on the real dataset after the full SIRENE load.
