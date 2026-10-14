@@ -13,6 +13,7 @@ Notes on INSEE fields used here (verify against the current file layout before e
 from __future__ import annotations
 
 import csv
+import re
 from pathlib import Path
 from typing import Iterator, Optional
 
@@ -38,6 +39,16 @@ def _clean(v: Optional[str]) -> Optional[str]:
         return None
     v = v.strip()
     return v if v and v != "[ND]" else None
+
+
+_NAF_RE = re.compile(r"^\d{2}\.\d{2}[A-Z]$")
+
+
+def _naf(v: Optional[str]) -> Optional[str]:
+    """NAF rev.2 format only (e.g. 10.71C). Old-nomenclature (NAFRev1/NAP) or malformed codes become None instead of
+    violating the DB CHECK constraint and aborting a multi-million-row load."""
+    v = _clean(v)
+    return v if v and _NAF_RE.match(v) else None
 
 
 def _date(v: Optional[str]) -> Optional[str]:
@@ -72,7 +83,7 @@ def map_unite_legale(row: dict) -> Optional[dict]:
         "legal_name": name,
         "trading_name": _clean(row.get("denominationUsuelle1UniteLegale")),
         "legal_form_code": legal_form,
-        "main_naf": _clean(row.get("activitePrincipaleUniteLegale")),
+        "main_naf": _naf(row.get("activitePrincipaleUniteLegale")),
         "is_sole_proprietor": is_sole,
         "employee_range": _clean(row.get("trancheEffectifsUniteLegale")),
         "size_category": _clean(row.get("categorieEntreprise")),
@@ -108,7 +119,7 @@ def map_etablissement(row: dict) -> Optional[dict]:
         "nic": siret[9:],
         "is_head_office": _clean(row.get("etablissementSiege")) == "true",
         "establishment_name": _clean(row.get("enseigne1Etablissement")) or _clean(row.get("denominationUsuelleEtablissement")),
-        "naf": _clean(row.get("activitePrincipaleEtablissement")),
+        "naf": _naf(row.get("activitePrincipaleEtablissement")),
         "status": status,
         "creation_date": _date(row.get("dateCreationEtablissement")),
         "closure_date": closure_date,

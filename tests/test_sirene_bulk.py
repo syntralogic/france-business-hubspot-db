@@ -85,3 +85,11 @@ def test_closure_date_only_when_the_period_began_with_the_state_change():
     # an active establishment never has a closure date
     assert map_etablissement(et(changementEtatAdministratifEtablissement="true",
                                 dateDebutPeriodeEtablissement="2025-06-30"))["closure_date"] is None
+
+
+def test_old_style_or_malformed_naf_becomes_none_not_a_db_error():
+    # Regression found by the synthetic scale test: NAFRev1-style "151A" aborted the whole bulk load (DB CHECK).
+    assert map_unite_legale(ul(activitePrincipaleUniteLegale="151A"))["main_naf"] is None
+    assert map_unite_legale(ul(activitePrincipaleUniteLegale="10.71C"))["main_naf"] == "10.71C"
+    assert map_etablissement(et(activitePrincipaleEtablissement="1071"))["naf"] is None
+    assert map_etablissement(et(activitePrincipaleEtablissement="43.22A"))["naf"] == "43.22A"
