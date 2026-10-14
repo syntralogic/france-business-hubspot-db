@@ -1,0 +1,14 @@
+# Exact versions the test suite passed with (Python 3.12, 14 Oct 2026). Used by the Dockerfile for reproducible builds.
+# Regenerate: python -m venv /tmp/v && /tmp/v/bin/pip install -r requirements.txt && /tmp/v/bin/pip freeze (drop pytest and its deps)
+anyio==4.15.1
+certifi==2026.7.22
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
+idna==3.20
+phonenumbers==9.0.41
+psycopg==3.3.6
+psycopg-binary==3.3.6
+RapidFuzz==3.14.6
+tenacity==9.2.1
+typing_extensions==4.16.0

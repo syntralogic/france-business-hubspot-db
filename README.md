@@ -32,7 +32,9 @@ TEST_DATABASE_URL=postgresql://user:pw@localhost/fbdb_test pytest tests/integrat
 ```
 
 ## Deployment
-See `docs/15-deployment.md` (VPS sizing, Docker, cron, logs, monitoring, alerts, acceptance checklist) and `docker-compose.yml`.
+See `docs/15-deployment.md` (full runbook: VPS sizing, Docker, first load, cron, HubSpot import, updates, backups, monitoring, acceptance checklist).
+Short version on a server: `cp .env.example .env` (fill it), `docker compose up -d db`, `scripts/init_db.sh`, `scripts/initial_load.sh`, install
+`deploy/crontab.example`. Later updates: `scripts/deploy.sh`. CI runs the tests and builds the image on every push.
 
 ## Stack
 - PostgreSQL (central store), Python 3.11+ (ETL, matching, enrichment)

@@ -2,6 +2,7 @@
 # Weekly run wrapper. Cron example (Monday 03:00): 0 3 * * 1 /opt/fbdb/scripts/run_weekly.sh
 # Every step runs even if an earlier one failed (they are independent enough: a failed delta must not block the
 # bounded enrichments). At the end: one row in job_runs, a failure alert (Slack/email) and an optional ping.
+# STEP_TIMEOUT_SECONDS (default 21600 = 6 h) caps each step.
 # Exit code: 0 all steps ok, 1 otherwise. Steps without their key/credentials are skipped and logged.
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -15,10 +16,12 @@ FAILED=()
 step() {  # step NAME CMD...
   local name="$1"; shift
   echo "$(date -u +%FT%TZ) START $name" >>"$LOG"
-  if "$@" >>"$LOG" 2>&1; then
+  timeout "${STEP_TIMEOUT_SECONDS:-21600}" "$@" >>"$LOG" 2>&1   # a hung API must not block the whole run (exit 124 = timeout)
+  local rc=$?   # capture first: $(date) below would reset $? to 0
+  if [ "$rc" -eq 0 ]; then
     echo "$(date -u +%FT%TZ) OK    $name" >>"$LOG"
   else
-    echo "$(date -u +%FT%TZ) FAIL  $name (exit $?)" >>"$LOG"
+    echo "$(date -u +%FT%TZ) FAIL  $name (exit $rc)" >>"$LOG"
     FAILED+=("$name")
   fi
 }
@@ -33,7 +36,17 @@ if [ -n "${INPI_USERNAME:-}" ]; then step inpi python -m fbdb.enrich.inpi --limi
 if [ -n "${PAPPERS_API_KEY:-}" ]; then step pappers python -m fbdb.enrich.pappers --limit "${PAPPERS_PER_RUN:-200}"; else skip pappers "PAPPERS_API_KEY not set"; fi
 if [ -n "${GOOGLE_PLACES_API_KEY:-}" ]; then step places python -m fbdb.enrich.places --limit "${PLACES_PER_RUN:-100}"; else skip places "GOOGLE_PLACES_API_KEY not set"; fi
 
-# Housekeeping: keep 90 days of logs
+# HubSpot export (the deliverable). EXPORT_AFTER_WEEKLY=0 disables it; EXPORT_INCLUDE_CLOSED=1 adds closed establishments
+# so HubSpot can be updated with closures; EXPORT_SIRET_IS_IMPORT_KEY=1 only if the HubSpot import uses SIRET as identifier.
+if [ "${EXPORT_AFTER_WEEKLY:-1}" = 1 ]; then
+  EXPORT_ARGS=(--out "data/exports/$(date +%F)")
+  [ "${EXPORT_INCLUDE_CLOSED:-0}" = 1 ] && EXPORT_ARGS+=(--include-closed)
+  [ "${EXPORT_SIRET_IS_IMPORT_KEY:-0}" = 1 ] && EXPORT_ARGS+=(--siret-is-import-key)
+  step export python -m fbdb.export.run_export "${EXPORT_ARGS[@]}"
+else skip export "EXPORT_AFTER_WEEKLY=0"; fi
+
+# Housekeeping: keep 90 days of logs, 8 weeks of export folders
+find data/exports -mindepth 1 -maxdepth 1 -type d -mtime +56 -exec rm -rf {} + 2>/dev/null || true
 find reports -maxdepth 1 -name 'run_*.log' -mtime +90 -delete 2>/dev/null || true
 
 if [ ${#FAILED[@]} -eq 0 ]; then

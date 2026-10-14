@@ -9,11 +9,17 @@ services:
       POSTGRES_DB: fbdb
       POSTGRES_USER: fbdb
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
-    # Starting values for an 8 vCPU / 32 GB server; halve them on a smaller one.
-    command: ["postgres", "-c", "shared_buffers=4GB", "-c", "effective_cache_size=16GB",
-              "-c", "maintenance_work_mem=1GB", "-c", "work_mem=64MB", "-c", "max_wal_size=8GB"]
+    # Defaults fit a small 2 vCPU / 4 GB pilot server. For the full load on 8 vCPU / 32 GB set in .env:
+    #   PG_SHARED_BUFFERS=4GB PG_EFFECTIVE_CACHE_SIZE=16GB PG_MAINTENANCE_WORK_MEM=1GB PG_WORK_MEM=64MB PG_MAX_WAL_SIZE=8GB
+    command: ["postgres",
+              "-c", "shared_buffers=${PG_SHARED_BUFFERS:-1GB}",
+              "-c", "effective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-2GB}",
+              "-c", "maintenance_work_mem=${PG_MAINTENANCE_WORK_MEM:-256MB}",
+              "-c", "work_mem=${PG_WORK_MEM:-16MB}",
+              "-c", "max_wal_size=${PG_MAX_WAL_SIZE:-2GB}"]
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./backups:/backups          # pg_dump output (scripts/backup.sh) and restore input
     ports:
       - "127.0.0.1:5432:5432"      # local only: never expose the database to the internet
     healthcheck:
@@ -36,6 +42,7 @@ services:
     volumes:
       - ./reports:/app/reports
       - ./data:/app/data
+      - ./backups:/app/backups
     profiles: ["jobs"]            # only started by `docker compose run`, never by `up`
     logging:
       driver: json-file
