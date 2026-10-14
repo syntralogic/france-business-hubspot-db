@@ -41,6 +41,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from fbdb.api import DbApi
+from fbdb.schema import ensure_schema_safe
 
 log = logging.getLogger("fbdb.web")
 KEEPALIVE_EVERY_S = 300
@@ -218,6 +219,8 @@ def main() -> None:
     token = os.environ.get("RUN_TOKEN") or None
     if not token:
         log.warning("RUN_TOKEN is not set: /run and /status are disabled")
+    if os.environ.get("AUTO_INIT_SCHEMA", "1") != "0":   # background: the health check must answer at once
+        threading.Thread(target=ensure_schema_safe, args=(os.environ.get("DATABASE_URL"),), daemon=True).start()
     server = make_server("0.0.0.0", port, JobManager(keepalive=self_ping), token)
     log.info("listening on port %s", port)
     server.serve_forever()
