@@ -88,3 +88,54 @@ def test_second_run_while_running_gets_409_and_bad_job_400():
     finally:
         gate.set()
         server.shutdown()
+
+
+class FakeApi:
+    def handle(self, path, params):
+        if path == "/api/stats":
+            return 200, {"companies": 3}
+        if path == "/api/boom":
+            raise RuntimeError("db down: secret detail")
+        return 404, {"error": "not found"}
+
+
+def serve_api(origins=("https://fbdb-viewer.vercel.app",)):
+    server = web.make_server("127.0.0.1", 0, web.JobManager(runner=lambda n, c: (0, "")), "s3cret",
+                             api=FakeApi(), origins=list(origins))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, f"http://127.0.0.1:{server.server_address[1]}"
+
+
+def raw(base, path, method="GET", origin=None):
+    req = urllib.request.Request(base + path, method=method)
+    if origin:
+        req.add_header("Origin", origin)
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return r.status, r.read().decode(), r.headers
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode(), e.headers
+
+
+def test_api_needs_no_token_and_sets_cors_only_for_allowed_origin():
+    server, base = serve_api()
+    try:
+        code, body, h = raw(base, "/api/stats", origin="https://fbdb-viewer.vercel.app")
+        assert code == 200 and json.loads(body) == {"companies": 3}
+        assert h["Access-Control-Allow-Origin"] == "https://fbdb-viewer.vercel.app"
+        code, _, h = raw(base, "/api/stats", origin="https://evil.example")
+        assert code == 200 and h.get("Access-Control-Allow-Origin") is None
+    finally:
+        server.shutdown()
+
+
+def test_api_is_read_only_hides_errors_and_answers_preflight():
+    server, base = serve_api()
+    try:
+        assert raw(base, "/api/stats", method="POST")[0] == 405
+        code, body, _ = raw(base, "/api/boom")
+        assert code == 500 and "secret" not in body
+        code, _, h = raw(base, "/api/stats", method="OPTIONS", origin="https://fbdb-viewer.vercel.app")
+        assert code == 204 and h["Access-Control-Allow-Methods"] == "GET, OPTIONS"
+    finally:
+        server.shutdown()

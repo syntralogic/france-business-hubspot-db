@@ -14,6 +14,22 @@ weekly pipeline run inside a free web service. It is meant for a demo or a small
 Without `RUN_TOKEN` the `/run` and `/status` endpoints answer 503: jobs never start without a secret. The `key` query
 parameter is accepted too, but the header is preferred (URLs end up in logs).
 
+## Public read-only data API (for the demo viewer)
+`src/fbdb/api.py`, served under `/api` by the same process. No token (a browser cannot keep a secret), so it is
+restricted by design: read-only transaction with a statement timeout, page size capped at 50, search text always bound as a
+parameter, and only business fields are returned. Phone, email, LinkedIn, director names and Google data are not exposed;
+sole proprietors and non-diffusible units never appear. CORS allows only `CORS_ORIGINS` (default
+`https://fbdb-viewer.vercel.app`, comma separated; set it on Render if the viewer URL changes).
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/stats` | `{establishments, companies, rge_certified, with_website}` (cached 60 s) |
+| `GET /api/companies?q=&dept=&city=&rge=1&page=1&per_page=25` | `{total, page, per_page, results[]}`; `q` = name fragment, 9-digit SIREN or 14-digit SIRET |
+
+Result fields: siret, siren, legal_name, trading_name, establishment_name, street, postal_code, city, department_code,
+department_name, region, naf, naf_label, trade, legal_form, is_head_office, status, creation_date, employee_range,
+size_category, certifications, rge_labels, rge_until, website, revenue, revenue_year.
+
 ## Render settings
 - New > Web Service > this repo, branch `main`, region Frankfurt, instance type **Free**.
 - Build command: `pip install -r requirements.txt`

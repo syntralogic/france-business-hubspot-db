@@ -9,6 +9,8 @@ starts a minimal server (standard library only) with three endpoints:
                              delta, directors, geocode, BODACC, ... , job_runs record, failure alert). weekly and
                              directors run just that one step.
   GET  /status            -> JSON with the state and the log tail of the last run.
+  GET  /api/stats, /api/companies  -> read-only public data API for the demo viewer (fbdb.api). No token; CORS is
+                             limited to CORS_ORIGINS (default https://fbdb-viewer.vercel.app, comma separated).
 
 /run and /status need the secret RUN_TOKEN, sent as header `X-Run-Token: <secret>` (preferred) or `?key=<secret>`.
 If RUN_TOKEN is not set the two endpoints are disabled (503): the server never runs jobs without a secret.
@@ -24,6 +26,8 @@ Environment: DATABASE_URL, INSEE_API_KEY, RUN_TOKEN (required); the optional key
 from __future__ import annotations
 
 import hmac
+import datetime
+import decimal
 import json
 import logging
 import os
@@ -35,6 +39,8 @@ import urllib.request
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
+
+from fbdb.api import DbApi
 
 log = logging.getLogger("fbdb.web")
 KEEPALIVE_EVERY_S = 300
@@ -112,12 +118,34 @@ def self_ping(stop: threading.Event) -> None:
             log.warning("keep-alive ping failed: %s", exc)
 
 
-def make_handler(manager: JobManager, token: str | None):
+def _json_default(o):
+    if isinstance(o, (datetime.date, datetime.datetime)):
+        return o.isoformat()
+    if isinstance(o, decimal.Decimal):
+        return float(o)
+    raise TypeError(f"not serializable: {type(o)}")
+
+
+def cors_origins() -> list[str]:
+    raw = os.environ.get("CORS_ORIGINS", "https://fbdb-viewer.vercel.app")
+    return [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]
+
+
+def make_handler(manager: JobManager, token: str | None, api=None, origins: list[str] | None = None):
+    api = api if api is not None else DbApi(os.environ.get("DATABASE_URL"))
+    origins = origins if origins is not None else cors_origins()
+
     class Handler(BaseHTTPRequestHandler):
         def _send(self, code: int, body, ctype: str = "application/json") -> None:
-            data = body if isinstance(body, bytes) else (body if isinstance(body, str) else json.dumps(body)).encode()
+            data = body if isinstance(body, bytes) else (
+                body if isinstance(body, str) else json.dumps(body, default=_json_default)).encode()
             self.send_response(code)
             self.send_header("Content-Type", ctype)
+            origin = self.headers.get("Origin", "")
+            if self.path.startswith("/api/") and ("*" in origins or origin.rstrip("/") in origins):
+                self.send_header("Access-Control-Allow-Origin", origin)
+                self.send_header("Vary", "Origin")
+                self.send_header("Cache-Control", "public, max-age=30")
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)
@@ -131,6 +159,15 @@ def make_handler(manager: JobManager, token: str | None):
             query = parse_qs(url.query)
             if url.path == "/health" and method == "GET":
                 return self._send(200, "ok", "text/plain")
+            if url.path.startswith("/api/"):
+                if method != "GET":
+                    return self._send(405, {"error": "read-only API"})
+                try:
+                    code, body = api.handle(url.path, query)
+                except Exception as exc:  # DB down, timeout, bad query: never leak internals to the browser
+                    log.warning("api error on %s: %s", url.path, exc)
+                    code, body = 500, {"error": "query failed"}
+                return self._send(code, body)
             if url.path in ("/run", "/status"):
                 if not token:
                     return self._send(503, {"error": "RUN_TOKEN is not configured"})
@@ -153,14 +190,26 @@ def make_handler(manager: JobManager, token: str | None):
         def do_POST(self):
             self._route("POST")
 
+        def do_OPTIONS(self):  # CORS preflight
+            origin = self.headers.get("Origin", "")
+            self.send_response(204)
+            if "*" in origins or origin.rstrip("/") in origins:
+                self.send_header("Access-Control-Allow-Origin", origin)
+                self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+                self.send_header("Access-Control-Allow-Headers", "Content-Type")
+                self.send_header("Vary", "Origin")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
         def log_message(self, fmt, *args):  # keep the secret in ?key= out of the access log
             log.info("%s %s", self.command, urlparse(self.path).path)
 
     return Handler
 
 
-def make_server(host: str, port: int, manager: JobManager, token: str | None) -> ThreadingHTTPServer:
-    return ThreadingHTTPServer((host, port), make_handler(manager, token))
+def make_server(host: str, port: int, manager: JobManager, token: str | None, api=None,
+                origins: list[str] | None = None) -> ThreadingHTTPServer:
+    return ThreadingHTTPServer((host, port), make_handler(manager, token, api, origins))
 
 
 def main() -> None:
