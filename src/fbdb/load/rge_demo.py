@@ -22,6 +22,7 @@ import httpx
 import psycopg
 
 from fbdb.enrich import ademe_rge
+from fbdb.enrich.annuaire import AnnuaireClient
 from fbdb.extract.sirene_api import SireneApiClient, flatten_etablissement
 from fbdb.load.sirene_loader import load
 
@@ -68,12 +69,72 @@ def siret_query(sirets: list[str]) -> str:
     return " OR ".join(f"siret:{s}" for s in sirets)
 
 
+def _s(v) -> str:
+    return "" if v is None else str(v)
+
+
+def flat_from_annuaire(result: dict, siret: str) -> Optional[dict]:
+    """Annuaire des Entreprises result + one of its establishments -> the stock-file column names the loader maps."""
+    if _s(result.get("siren")) != siret[:9]:
+        return None
+    etab = next((e for e in [*(result.get("matching_etablissements") or []), result.get("siege") or {}]
+                 if _s(e.get("siret")) == siret), None)
+    if etab is None:
+        return None
+    return {
+        "siren": result["siren"], "siret": siret,
+        "denominationUniteLegale": _s(result.get("nom_raison_sociale") or result.get("nom_complet")),
+        "categorieJuridiqueUniteLegale": _s(result.get("nature_juridique")),
+        "activitePrincipaleUniteLegale": _s(result.get("activite_principale")),
+        "trancheEffectifsUniteLegale": _s(result.get("tranche_effectif_salarie")),
+        "categorieEntreprise": _s(result.get("categorie_entreprise")),
+        "etatAdministratifUniteLegale": _s(result.get("etat_administratif")),
+        "dateCreationUniteLegale": _s(result.get("date_creation")),
+        "statutDiffusionUniteLegale": _s(result.get("statut_diffusion") or "O"),
+        "etablissementSiege": "true" if etab.get("est_siege") else "false",
+        "enseigne1Etablissement": _s(etab.get("nom_commercial")),
+        "activitePrincipaleEtablissement": _s(etab.get("activite_principale")),
+        "etatAdministratifEtablissement": _s(etab.get("etat_administratif")),
+        "dateCreationEtablissement": _s(etab.get("date_creation")),
+        "numeroVoieEtablissement": _s(etab.get("numero_voie")),
+        "indiceRepetitionEtablissement": _s(etab.get("indice_repetition")),
+        "typeVoieEtablissement": _s(etab.get("type_voie")),
+        "libelleVoieEtablissement": _s(etab.get("libelle_voie")),
+        "complementAdresseEtablissement": _s(etab.get("complement_adresse")),
+        "codePostalEtablissement": _s(etab.get("code_postal")),
+        "libelleCommuneEtablissement": _s(etab.get("libelle_commune")),
+    }
+
+
+def fetch_annuaire(sirets: list[str], client: Optional[AnnuaireClient] = None) -> Iterator[dict]:
+    """Key-less fallback: one free lookup per SIRET (about 4 per second), so the demo size is capped."""
+    client = client or AnnuaireClient()
+    for siret in sirets[:int(os.environ.get("RGE_FALLBACK_MAX", "1500"))]:
+        try:
+            data = client._get({"q": siret, "per_page": 1})
+        except httpx.HTTPError as exc:
+            log.warning("annuaire lookup failed for %s: %s", siret, exc)
+            continue
+        for res in data.get("results") or []:
+            flat = flat_from_annuaire(res, siret)
+            if flat:
+                yield flat
+
+
 def fetch_establishments(sirets: list[str], api: Optional[SireneApiClient] = None) -> Iterator[dict]:
-    api = api or SireneApiClient()
-    for i in range(0, len(sirets), BATCH):
+    """Sirene API when the key works, otherwise the free Annuaire des Entreprises."""
+    try:
+        api = api or SireneApiClient()
+        first = api._get("/siret", {"q": siret_query(sirets[:BATCH]), "nombre": min(BATCH, len(sirets))})
+    except (KeyError, httpx.HTTPStatusError) as exc:
+        log.warning("Sirene API not usable (%s): using the free Annuaire des Entreprises, smaller sample", type(exc).__name__)
+        yield from fetch_annuaire(sirets)
+        return
+    for item in first.get("etablissements", []):
+        yield flatten_etablissement(item)
+    for i in range(BATCH, len(sirets), BATCH):
         chunk = sirets[i:i + BATCH]
-        data = api._get("/siret", {"q": siret_query(chunk), "nombre": len(chunk)})
-        for item in data.get("etablissements", []):
+        for item in api._get("/siret", {"q": siret_query(chunk), "nombre": len(chunk)}).get("etablissements", []):
             yield flatten_etablissement(item)
 
 
