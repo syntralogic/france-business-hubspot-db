@@ -5,14 +5,14 @@ Pipeline that builds a deduplicated, enriched database of French businesses and 
 
 ## Status
 Built incrementally, one commit per step. Start with `docs/00-index.md`: it maps the 16 sections of the client brief to files.
-Implemented and tested (97 tests: 73 unit + 24 against a real PostgreSQL 16): normalization, dedup, conflict resolution, SIRENE bulk + API delta,
-directors enrichment (Annuaire des Entreprises), licensed phone/email file loader (needs a signed provider contract, see docs/14-licensed-contacts.md), HubSpot export with validation. Geocoding, ADEME RGE, BODACC and INPI RNE (Chunk 2 complete) built. Acceptance metrics script built (Chunk 7). Pappers financials built (paid key needed, daily credit cap). Google Places ratings built (paid key, daily call cap, export keeps ratings out unless licensed). Not built yet: Docker/deploy files, logging, monitoring, alerts (Chunk 6) (see docs/11-timeline-cost.md). The live INSEE API path needs a real INSEE API key, and the Annuaire client should be run once against the live API on the server (see docs/10-testing-acceptance.md and docs/13-verification-log.md). Source and HubSpot facts were re-verified on 13 Oct 2026: see docs/13-verification-log.md.
+Implemented and tested (104 tests: 79 unit + 25 against a real PostgreSQL 16): normalization, dedup, conflict resolution, SIRENE bulk + API delta,
+directors enrichment (Annuaire des Entreprises), licensed phone/email file loader (needs a signed provider contract, see docs/14-licensed-contacts.md), HubSpot export with validation. Geocoding, ADEME RGE, BODACC and INPI RNE (Chunk 2 complete) built. Acceptance metrics script built (Chunk 7). Pappers financials built (paid key needed, daily credit cap). Google Places ratings built (paid key, daily call cap, export keeps ratings out unless licensed). Chunk 6 part 1 built: run_weekly.sh with per-step log, job_runs record, Slack/email failure alerts, missed-run check (`python -m fbdb.ops.jobs check --job weekly`, run daily from cron). Not built yet: Dockerfile/docker-compose and deployment guide (see docs/11-timeline-cost.md). The live INSEE API path needs a real INSEE API key, and the Annuaire client should be run once against the live API on the server (see docs/10-testing-acceptance.md and docs/13-verification-log.md). Source and HubSpot facts were re-verified on 13 Oct 2026: see docs/13-verification-log.md.
 
 ## Quick start
 ```
 python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
 cp .env.example .env            # fill DATABASE_URL and INSEE_API_KEY
-scripts/init_db.sh               # creates (or upgrades) the schema: sql/000..010 in order
+scripts/init_db.sh               # creates (or upgrades) the schema: sql/000..011 in order
 python -m fbdb.load.reference --naf naf_rev2.csv --legal-forms categories_juridiques.csv   # INSEE CSVs: NAF labels, full legal form list
 python -m fbdb.load.sirene_loader --ul StockUniteLegale_utf8.csv --etab StockEtablissement_utf8.csv --only-active
 python -m fbdb.load.weekly            # weekly delta (or scripts/run_weekly.sh from cron)
