@@ -51,3 +51,17 @@ def ensure_schema_safe(dsn: str | None) -> None:
                 log.info("demo load done")
         except Exception as exc:
             log.error("demo load failed: %s", str(exc)[:500])
+    ensure_rge_demo_safe(dsn)
+
+
+def ensure_rge_demo_safe(dsn: str | None) -> None:
+    """Free RGE demo data (real artisans with certificates) when the database has none yet."""
+    if not dsn or os.environ.get("AUTO_RGE_DEMO", "1") == "0":
+        return
+    try:
+        from fbdb.load.rge_demo import has_rge, rge_demo
+        if not has_rge(dsn):
+            log.info("no RGE data yet: loading RGE companies (ADEME + Sirene API), AUTO_RGE_DEMO=0 to disable")
+            rge_demo(dsn, int(os.environ.get("RGE_DEMO_COMPANIES", "3000")))
+    except Exception as exc:
+        log.error("rge demo failed: %s", str(exc)[:500])
