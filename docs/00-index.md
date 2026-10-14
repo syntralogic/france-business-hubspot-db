@@ -22,4 +22,4 @@ The client brief asks for 16 sections in a fixed order. This table maps each one
 | 16 | Risks, assumptions, open questions | [12-risks-assumptions.md](12-risks-assumptions.md) |
 | App. A | Verification log (sources and HubSpot facts checked on 13 Oct 2026) | [13-verification-log.md](13-verification-log.md) |
 | App. B | Licensed phone/email file loader (provider-agnostic, contract required) | [14-licensed-contacts.md](14-licensed-contacts.md) |
-- `15-deployment.md`: server, Docker, cron, logs, monitoring, alerts, on-server acceptance checklist (Chunk 6)
+| App. C | Deployment, scheduling, logs, monitoring, alerts, on-server acceptance checklist | [15-deployment.md](15-deployment.md) |
