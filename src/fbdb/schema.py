@@ -41,3 +41,13 @@ def ensure_schema_safe(dsn: str | None) -> None:
         log.info("schema ready")
     except Exception as exc:
         log.error("schema init failed: %s", str(exc)[:500])
+        return
+    if os.environ.get("AUTO_DEMO_LOAD", "1") != "0":   # free demo slice, only into an empty database
+        try:
+            from fbdb.load.demo_load import demo_load, is_empty
+            if is_empty(dsn):
+                log.info("database is empty: loading a small demo slice of SIRENE (AUTO_DEMO_LOAD=0 to disable)")
+                demo_load(dsn, int(os.environ.get("DEMO_ROWS", "20000")))
+                log.info("demo load done")
+        except Exception as exc:
+            log.error("demo load failed: %s", str(exc)[:500])
