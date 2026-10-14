@@ -91,7 +91,7 @@ def collect(dsn: str, threshold_note: float = 0.6, target_rows: int = 500_000) -
         cols = [d.name for d in conn.execute("SELECT * FROM v_hubspot_companies LIMIT 0").description if d.name not in SKIP_COLUMNS]
         selects = [sql.SQL("count(*)")] + [
             sql.SQL("count(NULLIF(btrim({}::text), ''))").format(sql.Identifier(c)) for c in cols]
-        row = conn.execute(sql.SQL("SELECT {} FROM v_hubspot_companies").format(sql.SQL(", ").join(selects))).fetchone()
+        row = conn.execute(sql.SQL("SELECT {} FROM v_hubspot_companies WHERE status='active'").format(sql.SQL(", ").join(selects))).fetchone()
         exportable = row[0]
         rates = {c: (row[i + 1] / exportable if exportable else 0.0) for i, c in enumerate(cols)}
 
@@ -100,12 +100,12 @@ def collect(dsn: str, threshold_note: float = 0.6, target_rows: int = 500_000) -
 
         v, with_xy = one("""SELECT count(*) FILTER (WHERE a.address_status='verified'),
                                    count(*) FILTER (WHERE a.latitude IS NOT NULL AND a.longitude IS NOT NULL)
-                            FROM company_addresses a JOIN v_hubspot_companies v ON v.internal_id=a.establishment_id""")
+                            FROM company_addresses a JOIN v_hubspot_companies v ON v.internal_id=a.establishment_id AND v.status='active'""")
         pop, with_dir = one("""SELECT count(*), count(*) FILTER (WHERE EXISTS (SELECT 1 FROM company_directors d
                                  WHERE d.company_id=c.company_id AND d.is_active))
                                FROM companies c WHERE c.status='active' AND c.is_diffusible AND NOT c.is_sole_proprietor""")
         rge_est = one("""SELECT count(DISTINCT x.establishment_id) FROM company_certifications x
-                         JOIN v_hubspot_companies v ON v.internal_id=x.establishment_id
+                         JOIN v_hubspot_companies v ON v.internal_id=x.establishment_id AND v.status='active'
                          WHERE x.cert_type='RGE' AND (x.valid_to IS NULL OR x.valid_to>=current_date)""")[0]
         div = (lambda n, d: n / d if d else 0.0)
         rates["match_geocode_verified"] = div(v, exportable)

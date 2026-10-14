@@ -25,13 +25,14 @@ def db():
                                CASE WHEN siren='552100554' THEN 'verified' ELSE 'unverified' END,
                                CASE WHEN siren='552100554' THEN 48.869 END, CASE WHEN siren='552100554' THEN 2.331 END
                         FROM companies""")
+        conn.execute("INSERT INTO company_addresses (company_id, siret, status) SELECT company_id, '55210055400021', 'closed' FROM companies WHERE siren='552100554'")
         conn.execute("""INSERT INTO company_directors (company_id, last_name, first_name, role, is_active)
                         SELECT company_id, 'DUPONT', 'Anne', 'Gerant', TRUE FROM companies WHERE siren='552100554'""")
 
 
 def test_collect_counts_only_exportable(db):
     m, rates = metrics.collect(DSN, target_rows=10)
-    assert m["active"] == 3 and m["exportable"] == 2          # non-diffusible company never exported
+    assert m["active"] == 3 and m["exportable"] == 2          # non-diffusible company and closed establishment never exported
     assert round(m["coverage"], 3) == round(2 / 3, 3) and m["volume_vs_target"] == 0.2
     assert rates["city"] == 1.0 and rates["phone"] == 0.0
     assert rates["match_geocode_verified"] == 0.5 and rates["match_geocode_coordinates"] == 0.5
