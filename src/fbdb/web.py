@@ -26,7 +26,6 @@ Environment: DATABASE_URL, INSEE_API_KEY, RUN_TOKEN (required); the optional key
 from __future__ import annotations
 
 import hmac
-import datetime
 import decimal
 import json
 import logging
@@ -36,7 +35,7 @@ import sys
 import threading
 import time
 import urllib.request
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -120,7 +119,7 @@ def self_ping(stop: threading.Event) -> None:
 
 
 def _json_default(o):
-    if isinstance(o, (datetime.date, datetime.datetime)):
+    if isinstance(o, date):
         return o.isoformat()
     if isinstance(o, decimal.Decimal):
         return float(o)

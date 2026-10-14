@@ -139,3 +139,11 @@ def test_api_is_read_only_hides_errors_and_answers_preflight():
         assert code == 204 and h["Access-Control-Allow-Methods"] == "GET, OPTIONS"
     finally:
         server.shutdown()
+
+
+def test_json_default_serializes_dates_and_decimals():
+    import datetime as dt
+    import decimal
+    assert web._json_default(dt.date(2020, 1, 2)) == "2020-01-02"
+    assert web._json_default(dt.datetime(2020, 1, 2, 3, 4, 5)).startswith("2020-01-02T03:04:05")
+    assert web._json_default(decimal.Decimal("1.5")) == 1.5
