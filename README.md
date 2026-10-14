@@ -36,6 +36,8 @@ See `docs/15-deployment.md` (full runbook: VPS sizing, Docker, first load, cron,
 Short version on a server: `cp .env.example .env` (fill it), `docker compose up -d db`, `scripts/init_db.sh`, `scripts/initial_load.sh`, install
 `deploy/crontab.example`. Later updates: `scripts/deploy.sh`. CI runs the tests and builds the image on every push.
 
+Render (managed platform): `render.yaml` + `Dockerfile.render`, see `docs/17-render-deployment.md` (worker with persistent disk and its own scheduler; Render Cron Jobs cannot be used because they have no disk).
+
 ## Stack
 - PostgreSQL (central store), Python 3.11+ (ETL, matching, enrichment)
 - Weekly scheduled run (cron or systemd timer)
