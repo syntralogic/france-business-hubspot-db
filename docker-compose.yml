@@ -1,0 +1,45 @@
+# PostgreSQL + the pipeline image. Secrets come from .env (never committed, chmod 600).
+# First time:  docker compose up -d db && docker compose --profile jobs run --rm app bash scripts/init_db.sh
+# Weekly run:  docker compose --profile jobs run --rm -T app bash scripts/run_weekly.sh   (scheduled by host cron, see deploy/crontab.example)
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fbdb
+      POSTGRES_USER: fbdb
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    # Starting values for an 8 vCPU / 32 GB server; halve them on a smaller one.
+    command: ["postgres", "-c", "shared_buffers=4GB", "-c", "effective_cache_size=16GB",
+              "-c", "maintenance_work_mem=1GB", "-c", "work_mem=64MB", "-c", "max_wal_size=8GB"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"      # local only: never expose the database to the internet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fbdb -d fbdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "5"}
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://fbdb:${POSTGRES_PASSWORD}@db:5432/fbdb
+    volumes:
+      - ./reports:/app/reports
+      - ./data:/app/data
+    profiles: ["jobs"]            # only started by `docker compose run`, never by `up`
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "5"}
+
+volumes:
+  pgdata:

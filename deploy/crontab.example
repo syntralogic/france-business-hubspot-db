@@ -1,0 +1,8 @@
+# Install on the host with: crontab -e   (adjust /opt/fbdb). Server time is UTC unless changed.
+MAILTO=""
+# Weekly pipeline: Monday 03:00. Logs go to reports/run_YYYY-MM-DD.log; failures alert Slack/email.
+0 3 * * 1  cd /opt/fbdb && docker compose --profile jobs run --rm -T app bash scripts/run_weekly.sh >> /var/log/fbdb-cron.log 2>&1
+# Monitoring: every day 09:30, alerts when the weekly job did not run (>8 days) or the last run failed.
+30 9 * * * cd /opt/fbdb && docker compose --profile jobs run --rm -T app python -m fbdb.ops.jobs check --job weekly --max-age-days 8 >> /var/log/fbdb-cron.log 2>&1
+# Backup: Sunday 01:00 database dump, keep 4 weeks (copy them off the server too).
+0 1 * * 0  cd /opt/fbdb && mkdir -p backups && docker compose exec -T db pg_dump -U fbdb -Fc fbdb > backups/fbdb_$(date +\%F).dump && find backups -name 'fbdb_*.dump' -mtime +28 -delete
