@@ -1,6 +1,6 @@
 # 14. Testing and Acceptance Criteria
 
-## Automated tests (`pytest`, currently 71 passing: 54 unit + 17 PostgreSQL integration)
+## Automated tests (`pytest`, currently 109 passing: 83 unit + 26 PostgreSQL integration)
 | Area | Covered |
 |---|---|
 | Normalization | SIREN/SIRET Luhn (incl. La Poste rule), names, addresses, phones, emails, domains |
@@ -27,6 +27,12 @@
 
 ## Full-SIRENE load test
 `scripts/load_test.sh [WORKDIR]` on a server (throw-away database, ~25 GB free): downloads the two stock files, loads a 100k-row sample, then the full active set, runs the weekly delta twice (second run must add 0 history rows) and the export, logging duration and peak memory per step to `reports/load_test_<date>.log`. Not yet run (needs INSEE key, internet and PostgreSQL).
+
+## Dedup precision/recall on a labelled sample (criterion 3)
+`python -m fbdb.report.dedup_eval sample pairs.csv --out to_label.csv --n 500` writes a stratified labelling sheet with the pipeline's
+prediction and an empty `label` column. A human fills `same` or `different`; then `python -m fbdb.report.dedup_eval score to_label.csv`
+prints the confusion matrix, precision of automatic matches, recall, and exits 1 unless precision >= 99% on >= 500 labelled pairs.
+Candidate pairs come from the real data (for example records sharing a name, postal code or phone). Labelling needs a person; the tool does not label.
 
 ## Acceptance metrics script (Chunk 7)
 `python -m fbdb.report.metrics` measures on the export view: coverage (exportable / active establishments, and vs the volume target),
