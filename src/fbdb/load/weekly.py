@@ -79,12 +79,18 @@ SELECT c.company_id, 'companies', 'siren', NULL, c.siren, 'insert', c.primary_so
 FROM companies c JOIN stg_sirene_ul s ON s.siren = c.siren
 WHERE c.created_at >= %(started)s;
 """
+# New establishments are captured BEFORE the upsert (while "not in master" is still observable). Detecting them
+# afterwards by updated_at / missing insert-history mislabels every updated establishment as new, because the bulk
+# loader writes no history (regression found by scripts/synthetic_weekly.py: 10,200 bogus inserts for 1,700 real ones).
+CAPTURE_NEW_SIRETS = """
+CREATE TEMP TABLE new_sirets ON COMMIT DROP AS
+SELECT e.siret FROM stg_sirene_etab e
+WHERE e.is_diffusible AND NOT EXISTS (SELECT 1 FROM company_addresses a WHERE a.siret = e.siret)
+"""
 HISTORY_AFTER_INSERT_ESTABS = """
 INSERT INTO company_change_history (company_id, establishment_id, table_name, field_name, old_value, new_value, change_type, source_id, batch_id)
 SELECT a.company_id, a.establishment_id, 'company_addresses', 'siret', NULL, a.siret, 'insert', a.source_id, %(batch)s
-FROM company_addresses a JOIN stg_sirene_etab e ON e.siret = a.siret
-WHERE a.updated_at >= %(started)s AND NOT EXISTS (
-  SELECT 1 FROM company_change_history h WHERE h.establishment_id = a.establishment_id AND h.change_type = 'insert');
+FROM company_addresses a JOIN new_sirets n ON n.siret = a.siret
 """
 
 # Closures seen in this batch that SIRENE gave no exact date for: record the date INSEE processed the change
@@ -180,6 +186,7 @@ def run(since: str | None, dsn: str, client=None) -> dict:
             cur.execute(COUNT_NEW_COMPANIES); added_c = cur.fetchone()[0]
             cur.execute(COUNT_NEW_ESTABS); added_e = cur.fetchone()[0]
             cur.execute(COUNT_TOTAL_ESTABS); total = cur.fetchone()[0]
+            cur.execute(CAPTURE_NEW_SIRETS)
             cur.execute(HISTORY_COMPANY_CHANGES, p)
             cur.execute(HISTORY_ESTAB_CHANGES, p)
             cur.execute(UPSERT_COMPANIES)
