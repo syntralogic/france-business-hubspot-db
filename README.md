@@ -8,6 +8,9 @@ Built incrementally, one commit per step. Start with `docs/00-index.md`: it maps
 Implemented and tested (109 tests: 83 unit + 26 against a real PostgreSQL 16, run 14 Oct 2026): normalization, dedup, conflict resolution, SIRENE bulk + API delta,
 directors enrichment (Annuaire des Entreprises), licensed phone/email file loader (needs a signed provider contract, see docs/14-licensed-contacts.md), HubSpot export with validation. Geocoding, ADEME RGE, BODACC and INPI RNE (Chunk 2 complete) built. Acceptance metrics script built (Chunk 7). Pappers financials built (paid key needed, daily credit cap). Google Places ratings built (paid key, daily call cap, export keeps ratings out unless licensed). Chunk 6 part 1 built: run_weekly.sh with per-step log, job_runs record, Slack/email failure alerts, missed-run check (`python -m fbdb.ops.jobs check --job weekly`, run daily from cron). Chunk 6 part 2 built: Dockerfile, docker-compose.yml, deploy/crontab.example and docs/15-deployment.md (written, not yet run on a real server). (see docs/11-timeline-cost.md). The live INSEE API path needs a real INSEE API key, and the Annuaire client should be run once against the live API on the server (see docs/10-testing-acceptance.md and docs/13-verification-log.md). Dedup evaluation tool built (labelling sheet + precision/recall gate). Open client decisions and provider checklist: docs/16-client-questions.md. Source and HubSpot facts were re-verified on 13 Oct 2026: see docs/13-verification-log.md.
 
+## Free Render deploy
+Free Render web service wrapper (`python -m fbdb.web`, endpoints `/health`, `/run`, `/status`): see `docs/18-render-free-web-service.md` (the paid Blueprint is in `docs/17-render-deployment.md`).
+
 ## Quick start
 ```
 python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
