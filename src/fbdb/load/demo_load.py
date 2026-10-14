@@ -27,7 +27,10 @@ import psycopg
 from fbdb.load.sirene_loader import load
 
 log = logging.getLogger("fbdb.demo_load")
-BASE = os.environ.get("SIRENE_STOCK_BASE", "https://files.data.gouv.fr/insee-sirene")
+# Stable data.gouv.fr resource URLs of the Insee SIRENE stock files (the old files.data.gouv.fr paths no longer exist).
+# Overridable if Insee ever republishes them.
+UL_URL = os.environ.get("SIRENE_UL_URL", "https://www.data.gouv.fr/api/1/datasets/r/825f4199-cadd-486c-ac46-a65a8ea1a047")
+ETAB_URL = os.environ.get("SIRENE_ETAB_URL", "https://www.data.gouv.fr/api/1/datasets/r/0651fb76-bcf3-4f6a-a38d-bc04fa708576")
 MAX_ETAB_SCAN = 600_000
 
 
@@ -66,8 +69,10 @@ def build_slice(workdir: Path, rows: int) -> tuple[Path, Path]:
     ul_path, et_path = workdir / "ul.csv", workdir / "etab.csv"
     sirens: set[str] = set()
     with open(ul_path, "w", newline="", encoding="utf-8") as fh:
-        w, it = csv.writer(fh), stream_rows(f"{BASE}/StockUniteLegale_utf8.zip")
+        w, it = csv.writer(fh), stream_rows(UL_URL)
         header = next(it)
+        if "etatAdministratifUniteLegale" not in header:
+            raise ValueError(f"unexpected legal-unit file, columns: {header[:6]}")
         w.writerow(header)
         i_siren, i_state = header.index("siren"), header.index("etatAdministratifUniteLegale")
         n = 0
@@ -82,8 +87,10 @@ def build_slice(workdir: Path, rows: int) -> tuple[Path, Path]:
                 break
     log.info("demo: %d legal units read, %d active", n, len(sirens))
     with open(et_path, "w", newline="", encoding="utf-8") as fh:
-        w, it = csv.writer(fh), stream_rows(f"{BASE}/StockEtablissement_utf8.zip")
+        w, it = csv.writer(fh), stream_rows(ETAB_URL)
         header = next(it)
+        if "siret" not in header:
+            raise ValueError(f"unexpected establishment file, columns: {header[:6]}")
         w.writerow(header)
         i_siren = header.index("siren")
         kept = scanned = 0
