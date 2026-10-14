@@ -16,3 +16,8 @@ if [ -n "${INPI_USERNAME:-}" ]; then
 else
   echo "INPI step skipped (INPI_USERNAME not set)" >>"$LOG"
 fi
+if [ -n "${PAPPERS_API_KEY:-}" ]; then
+  python -m fbdb.enrich.pappers --limit "${PAPPERS_PER_RUN:-200}" >>"$LOG" 2>&1 || { echo "Pappers FAILED, see $LOG" >&2; exit 1; }
+else
+  echo "Pappers step skipped (PAPPERS_API_KEY not set)" >>"$LOG"
+fi
