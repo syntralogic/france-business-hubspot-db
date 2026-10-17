@@ -46,13 +46,13 @@ LEFT JOIN LATERAL (
   SELECT k.value_normalized, k.value_status, s.code AS source_code FROM company_contacts k
   LEFT JOIN data_sources s ON s.source_id = k.source_id
   WHERE k.company_id = c.company_id AND (k.establishment_id = a.establishment_id OR k.establishment_id IS NULL)
-    AND k.contact_type = 'phone' AND k.value_status IN ('verified','sourced')
+    AND k.contact_type = 'phone' AND k.value_status IN ('verified','sourced') AND k.opposed_at IS NULL
   ORDER BY (k.establishment_id IS NOT NULL) DESC, k.is_primary DESC, k.last_verified_at DESC NULLS LAST LIMIT 1) ph ON TRUE
 LEFT JOIN LATERAL (
   SELECT k.value_normalized, k.value_status, s.code AS source_code FROM company_contacts k
   LEFT JOIN data_sources s ON s.source_id = k.source_id
   WHERE k.company_id = c.company_id AND (k.establishment_id = a.establishment_id OR k.establishment_id IS NULL)
-    AND k.contact_type = 'email' AND k.value_status IN ('verified','sourced')   -- never 'inferred'
+    AND k.contact_type = 'email' AND k.value_status IN ('verified','sourced') AND k.opposed_at IS NULL   -- never 'inferred'
   ORDER BY (k.establishment_id IS NOT NULL) DESC, k.is_primary DESC, k.last_verified_at DESC NULLS LAST LIMIT 1) em ON TRUE
 LEFT JOIN LATERAL (
   SELECT k.value FROM company_contacts k
