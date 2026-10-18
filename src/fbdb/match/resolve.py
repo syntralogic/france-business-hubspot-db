@@ -22,6 +22,7 @@ class Candidate:
     observed_at: datetime
     confidence: float = 0.5
     status: str = "sourced"       # verified | sourced | inferred
+    source_id: Optional[int] = None   # data_sources.source_id, needed to persist conflicts (provenance)
 
 
 @dataclass
@@ -52,3 +53,23 @@ def resolve(candidates: list[Candidate], policy: str) -> Resolution:
     best = ranked[0]
     ties = [c for c in ranked[1:] if _key(c, policy) == _key(best, policy) and c.value != best.value]
     return Resolution(best.value, best, bool(ties), used_inferred, [c for c in ranked[1:] if c.value != best.value])
+
+
+def persist_conflicts(conn, company_id: int, field_name: str, res: Resolution, establishment_id=None) -> int:
+    """Keeps every losing value of a resolution in field_conflicts instead of silently dropping it.
+
+    Returns the number of conflicting values passed to record_conflict (duplicates are ignored by the DB).
+    Does nothing when there is no winner or no differing alternative.
+    """
+    if res.winner is None or not res.alternatives:
+        return 0
+    from fbdb.common.provenance import record_conflict  # lazy: keeps resolve() free of DB imports
+
+    n = 0
+    for alt in res.alternatives:
+        if str(alt.value) == str(res.value):
+            continue
+        record_conflict(conn, company_id, field_name, res.value, res.winner.source_id,
+                        alt.value, alt.source_id, establishment_id)
+        n += 1
+    return n

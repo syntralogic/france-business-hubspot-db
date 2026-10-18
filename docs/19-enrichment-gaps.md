@@ -15,5 +15,5 @@ confirmed with `--limit 5` and the log read.
 Schema: `sql/003a_provenance.sql` (runs before 004 on purpose). The HubSpot view now excludes contacts with `opposed_at` set.
 
 Still open (needs a decision or data): Dropcontact (alternative to Hunter), website discovery by search (no proof rule yet),
-per-channel opposition (today one flag per contact value), integration of `record_conflict` into `match/resolve.py`.
+per-channel opposition (today one flag per contact value), ~~integration of `record_conflict` into `match/resolve.py`~~ (done: `resolve.persist_conflicts`, `Candidate.source_id`; call it after `resolve()` in the loaders).
 Contracts/ToS to check: Firecrawl scraping of third-party sites, Hunter/Twilio storage terms, Qualibat/Qualifelec directory terms.

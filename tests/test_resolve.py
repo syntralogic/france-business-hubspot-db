@@ -43,3 +43,39 @@ def test_empty_and_unknown_policy():
     import pytest
     with pytest.raises(ValueError):
         resolve([Candidate("x", 1, NOW)], "nope")
+
+
+# --- persist_conflicts: losing values are kept, never silently dropped ---
+class _FakeConn:
+    def __init__(self):
+        self.calls = []
+
+    def execute(self, sql, params=None):
+        self.calls.append(params)
+
+
+def test_persist_conflicts_keeps_losing_values():
+    from datetime import datetime, timezone
+    from fbdb.match.resolve import Candidate, persist_conflicts, resolve
+
+    now = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    res = resolve([
+        Candidate("0102030405", 1, now, status="verified", source_id=1),
+        Candidate("0607080910", 4, now, status="sourced", source_id=4),
+    ], "contact")
+    conn = _FakeConn()
+    assert persist_conflicts(conn, 42, "phone", res) == 1
+    params = conn.calls[0]
+    # (company_id, establishment_id, field_name, kept_value, kept_source, other_value, other_source)
+    assert params == (42, None, "phone", "0102030405", 1, "0607080910", 4)
+
+
+def test_persist_conflicts_noop_without_alternatives():
+    from datetime import datetime, timezone
+    from fbdb.match.resolve import Candidate, persist_conflicts, resolve
+
+    now = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    res = resolve([Candidate("a", 1, now, source_id=1), Candidate("a", 2, now, source_id=2)], "registry")
+    conn = _FakeConn()
+    assert persist_conflicts(conn, 1, "name", res) == 0
+    assert conn.calls == []
