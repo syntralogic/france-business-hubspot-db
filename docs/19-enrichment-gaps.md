@@ -65,3 +65,10 @@ python -m fbdb.enrich.interlocutors list --siren 552100554
 - `+336/+337` goes to "Mobile Phone Number", any other phone to "Phone Number" (prefix hint, not proof of ownership). The evidence level of each value is exported (`Preuve email/telephone/mobile`); when several values compete for a slot the best evidence wins.
 - "Company domain name" is the proven website; without one the contact is associated by company name + the custom property SIREN. Create the custom properties (SIREN, Fonction categorie, Decideur confirme, Preuve email, Preuve telephone, Preuve mobile) before the import, and test with 100 rows first like the companies import.
 - SMS tools must still read `contact_oppositions` / `phone_sms_allowed`: this CSV is a call/email export.
+
+## Direct email of a named person (spec section 7)
+`python -m fbdb.enrich.email_find --limit 5` (Hunter Email Finder, paid, `HUNTER_FINDER_DAILY_CAP`, not in `run_weekly.sh`; migration `sql/015`).
+- Searches active interlocutors with a first + last name, no email linked yet, whose company has a website proven by SIREN (domain taken from that site). Default: `director` only (`--categories director,sales` to widen).
+- Never builds `prenom.nom@domaine` itself. Stored with source `hunter`, linked to the person with evidence `provider_attributed`: verification `valid` -> `verified`; `invalid`/`disposable` -> not stored; `accept_all`/`unknown`/none -> `inferred` (a hypothesis, NOT exported until qualified).
+- An address opposed on the email channel is never stored. Each attempt is remembered (`email_find_attempts`), so nobody is paid for twice before `--refresh-days` (180).
+- Not built: Dropcontact (alternative finder; decide after the Hunter hit-rate test) and a provider for DIRECT MOBILES of directors (Lusha-type contract needed: test its coverage on the client's artisans first). Until then a mobile only exists when published on the site or loaded from a licensed file, and stays "company - person not identified" unless a name sits next to it.
