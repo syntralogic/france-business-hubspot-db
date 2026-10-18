@@ -153,10 +153,11 @@ class FirecrawlClient:
 
     @retry(retry=retry_if_exception_type((RetryableError, httpx.TransportError)),
            wait=wait_exponential(multiplier=2, min=2, max=60), stop=stop_after_attempt(3), reraise=True)
-    def search(self, query: str, limit: int = 5) -> list[str]:
-        """Result URLs of a web search, best first ([] when nothing). Firecrawl v1 search: POST /v1/search,
-        body {"query", "limit", "lang", "country"}, answer {"success", "data": [{"url", "title", "description"}]}.
-        NOT verified against a live key from the build sandbox (blocked)."""
+    def search_hits(self, query: str, limit: int = 5) -> Optional[list[dict]]:
+        """Hits of a web search, best first: [{"url", "title", "description"}] ([] when nothing), or None when the provider
+        REFUSED the query (4xx other than key/credit errors, or success=false): "no result" and "could not search" differ.
+        Firecrawl v1 search: POST /v1/search, body {"query", "limit", "lang", "country"},
+        answer {"success", "data": [{"url", "title", "description"}]}. NOT verified against a live key (sandbox blocked)."""
         r = self._http.post(SEARCH_BASE, headers={"Authorization": f"Bearer {self._key}"},
                             json={"query": query, "limit": limit, "lang": "fr", "country": "fr"})
         if r.status_code in (401, 402, 403):
@@ -164,11 +165,16 @@ class FirecrawlClient:
         if r.status_code == 429 or r.status_code >= 500:
             raise RetryableError(f"HTTP {r.status_code}")
         if r.status_code >= 400:
-            return []
+            return None
         body = r.json()
         if not body.get("success", True):
-            return []
-        return [d["url"] for d in (body.get("data") or []) if isinstance(d, dict) and d.get("url")]
+            return None
+        return [{"url": d["url"], "title": d.get("title") or "", "description": d.get("description") or ""}
+                for d in (body.get("data") or []) if isinstance(d, dict) and d.get("url")]
+
+    def search(self, query: str, limit: int = 5) -> list[str]:
+        """Result URLs of a web search, best first ([] when nothing or when the query was refused)."""
+        return [h["url"] for h in (self.search_hits(query, limit) or [])]
 
 
 def check_site(client, siren: str, site_url: str, reserve=lambda: True) -> dict:

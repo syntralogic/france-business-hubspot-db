@@ -132,7 +132,13 @@ def collect(dsn: str, threshold_note: float = 0.6, target_rows: int = 500_000) -
             WHERE i.is_active AND i.function_category='director'""")
         rates["match_companies_with_proven_website"] = div(proven, comp)
         rates["match_companies_with_interlocutor"] = div(with_person, comp)
-        rates["match_companies_with_social_account"] = div(social, comp)
+        rates["match_companies_with_social_account"] = div(social, comp)     # confirmed accounts only (site link or proven by search)
+        # candidates found by search but NOT proven (social_searches.status = 'to_verify'), companies with no confirmed account
+        to_verify = one("""SELECT count(*) FROM companies c WHERE c.status='active' AND c.is_diffusible
+              AND EXISTS (SELECT 1 FROM social_searches s WHERE s.company_id=c.company_id AND s.status='to_verify')
+              AND NOT EXISTS (SELECT 1 FROM company_contacts k WHERE k.company_id=c.company_id
+                              AND k.contact_type IN ('social','linkedin') AND k.value_status<>'unavailable')""")[0]
+        rates["match_companies_with_social_to_verify"] = div(to_verify, comp)
         rates["match_directors_with_mobile_linked"] = div(d_mobile, dirs)          # mobile attached to the person (with evidence), not just the company
         rates["match_directors_with_verified_email_linked"] = div(d_email, dirs)   # deliverable per verifier + attached to the person
         rates["match_directors_with_any_email_linked"] = div(d_email_any, dirs)    # includes provider hypotheses ('inferred')
