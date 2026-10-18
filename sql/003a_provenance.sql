@@ -6,7 +6,7 @@ ALTER TABLE company_contacts ADD COLUMN IF NOT EXISTS match_url    TEXT;
 ALTER TABLE company_contacts ADD COLUMN IF NOT EXISTS line_type    TEXT;          -- landline / mobile / voip (Twilio Lookup)
 ALTER TABLE company_contacts ADD COLUMN IF NOT EXISTS verify_result TEXT;         -- provider verdict for emails (valid, invalid, accept_all, ...)
 ALTER TABLE company_contacts ADD COLUMN IF NOT EXISTS checked_at   TIMESTAMPTZ;   -- last provider check (email verifier / line type)
--- Opposition a la prospection, per contact and per channel. A set date means: do NOT export or use this value for that channel.
+-- LEGACY per-row flag (all channels). Still honoured by the export view (fail closed) but no longer written: use contact_oppositions.
 ALTER TABLE company_contacts ADD COLUMN IF NOT EXISTS opposed_at   TIMESTAMPTZ;
 ALTER TABLE company_contacts ADD COLUMN IF NOT EXISTS opposition_note TEXT;
 CREATE INDEX IF NOT EXISTS ix_contacts_unchecked ON company_contacts(contact_type, checked_at NULLS FIRST);
@@ -35,3 +35,27 @@ INSERT INTO data_sources(code,name,priority,is_official,update_freq,licence_note
  ('qualifelec','Qualifelec',3,FALSE,'per contract/file','Licence to verify'),
  ('qualitenr','Qualit''EnR',3,FALSE,'per contract/file','Licence to verify')
 ON CONFLICT (code) DO NOTHING;
+
+-- Opposition a la prospection, PER CHANNEL and keyed by the VALUE (not by a contact row), so the same email/phone stays blocked
+-- when it comes back through another company, a re-import or a later enrichment, and can be recorded before we even hold it.
+-- Channels: email -> 'email'; phone -> 'call' and 'sms' (independent). Exports and verifiers must check this table.
+CREATE TABLE IF NOT EXISTS contact_oppositions (
+  opposition_id    BIGSERIAL PRIMARY KEY,
+  contact_type     TEXT NOT NULL CHECK (contact_type IN ('email','phone')),
+  value_normalized TEXT NOT NULL,
+  channel          TEXT NOT NULL CHECK (channel IN ('email','call','sms')),
+  opposed_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  note             TEXT,
+  UNIQUE (contact_type, value_normalized, channel),
+  CHECK ((contact_type = 'email' AND channel = 'email') OR (contact_type = 'phone' AND channel IN ('call','sms')))
+);
+-- one-off carry-over of the legacy per-row flag: it meant "every channel"
+INSERT INTO contact_oppositions (contact_type, value_normalized, channel, opposed_at, note)
+  SELECT 'email', value_normalized, 'email', min(opposed_at), min(opposition_note) FROM company_contacts
+  WHERE contact_type = 'email' AND opposed_at IS NOT NULL GROUP BY value_normalized
+ON CONFLICT DO NOTHING;
+INSERT INTO contact_oppositions (contact_type, value_normalized, channel, opposed_at, note)
+  SELECT 'phone', k.value_normalized, ch.channel, min(k.opposed_at), min(k.opposition_note)
+  FROM company_contacts k CROSS JOIN (VALUES ('call'), ('sms')) AS ch(channel)
+  WHERE k.contact_type = 'phone' AND k.opposed_at IS NOT NULL GROUP BY k.value_normalized, ch.channel
+ON CONFLICT DO NOTHING;

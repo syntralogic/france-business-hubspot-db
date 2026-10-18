@@ -66,6 +66,7 @@ class HunterClient:
 SELECT_DUE = """
 SELECT k.contact_id, k.value_normalized FROM company_contacts k JOIN companies c ON c.company_id = k.company_id
 WHERE k.contact_type = 'email' AND k.value_status IN ('sourced','verified') AND k.opposed_at IS NULL
+  AND NOT (EXISTS (SELECT 1 FROM contact_oppositions o WHERE o.contact_type = 'email' AND o.value_normalized = k.value_normalized AND o.channel = 'email'))
   AND c.status = 'active' AND c.is_diffusible
   AND (k.checked_at IS NULL OR k.checked_at < now() - make_interval(days => %(days)s))
 ORDER BY k.checked_at NULLS FIRST, k.contact_id LIMIT %(limit)s
