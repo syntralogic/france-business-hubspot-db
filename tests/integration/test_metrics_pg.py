@@ -39,3 +39,26 @@ def test_collect_counts_only_exportable(db):
     assert rates["match_directors_non_sole_prop_companies"] == 0.5   # 1 of 2 diffusible companies
     rows = metrics.evaluate(rates, metrics.DEFAULT_TARGETS)
     assert "match_geocode_verified" in {r["metric"] for r in rows if r["status"] == "GAP"}
+
+
+def test_first_test_lot_kpis(db):
+    from fbdb.enrich import interlocutors as il
+    with psycopg.connect(DSN) as conn, conn.cursor() as cur:
+        cid = cur.execute("SELECT company_id FROM companies WHERE siren='552100554'").fetchone()[0]
+        cur.execute("INSERT INTO company_contacts (company_id, contact_type, value, value_normalized, value_status, match_proof) "
+                    "VALUES (%s,'website','a.fr','a.fr','verified','SIREN on site')", (cid,))
+        cur.execute("INSERT INTO company_contacts (company_id, contact_type, platform, value, value_normalized, value_status) "
+                    "VALUES (%s,'social','facebook','https://facebook.com/a','https://facebook.com/a','sourced')", (cid,))
+        for ctype, val, st in (("phone", "+33698765432", "sourced"), ("email", "dir@a.fr", "verified")):
+            cur.execute("INSERT INTO company_contacts (company_id, contact_type, value, value_normalized, value_status) VALUES (%s,%s,%s,%s,%s)",
+                        (cid, ctype, val, val, st))
+        boss = il.upsert_interlocutor(cur, cid, "Dupont", "Anne", "Gérant")
+        il.upsert_interlocutor(cur, cid, "Petit", "Paul", "Gérant")                              # second director with nothing attached
+        il.link_contact(cur, cid, boss, "phone", "+33698765432", "published_with_name")
+        il.link_contact(cur, cid, boss, "email", "dir@a.fr", "provider_attributed")
+        conn.commit()
+    _, rates = metrics.collect(DSN, target_rows=10)
+    assert rates["match_companies_with_proven_website"] == 0.5 and rates["match_companies_with_interlocutor"] == 0.5
+    assert rates["match_companies_with_social_account"] == 0.5
+    assert rates["match_directors_with_mobile_linked"] == 0.5 and rates["match_directors_with_verified_email_linked"] == 0.5
+    assert rates["match_directors_decision_maker_confirmed"] == 0.0

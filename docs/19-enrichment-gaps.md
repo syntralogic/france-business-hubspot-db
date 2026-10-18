@@ -72,3 +72,11 @@ python -m fbdb.enrich.interlocutors list --siren 552100554
 - Never builds `prenom.nom@domaine` itself. Stored with source `hunter`, linked to the person with evidence `provider_attributed`: verification `valid` -> `verified`; `invalid`/`disposable` -> not stored; `accept_all`/`unknown`/none -> `inferred` (a hypothesis, NOT exported until qualified).
 - An address opposed on the email channel is never stored. Each attempt is remembered (`email_find_attempts`), so nobody is paid for twice before `--refresh-days` (180).
 - Not built: Dropcontact (alternative finder; decide after the Hunter hit-rate test) and a provider for DIRECT MOBILES of directors (Lusha-type contract needed: test its coverage on the client's artisans first). Until then a mobile only exists when published on the site or loaded from a licensed file, and stays "company - person not identified" unless a name sits next to it.
+
+## First test lot: what to measure (client's last paragraph)
+`python -m fbdb.report.metrics` now reports (report only, no target agreed): `match_companies_with_proven_website`, `match_companies_with_interlocutor`, `match_companies_with_social_account`, `match_directors_with_mobile_linked` (a +336/+337 number attached to the director with evidence, not merely held by the company), `match_directors_with_verified_email_linked`, `match_directors_with_any_email_linked` (includes provider hypotheses), `match_directors_decision_maker_confirmed`.
+Suggested order for the test lot of ~100 companies (all paid steps start with `--limit 5`, read the log, then widen):
+1. `python -m fbdb.enrich.directors` (free), then `python -m fbdb.enrich.interlocutors sync-directors`
+2. `python -m fbdb.enrich.website` (or `website_discovery` for companies with no site) -> proven site, socials, phones, emails, people
+3. `python -m fbdb.enrich.email_find --limit 5` -> `python -m fbdb.enrich.email_verify` -> `python -m fbdb.enrich.phone_lookup`
+4. `python -m fbdb.report.metrics`, then export (`fbdb.export.run_export`, `fbdb.export.hubspot_contacts`) and a 100-row HubSpot test import.

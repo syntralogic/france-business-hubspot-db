@@ -112,6 +112,31 @@ def collect(dsn: str, threshold_note: float = 0.6, target_rows: int = 500_000) -
         rates["match_geocode_coordinates"] = div(with_xy, exportable)
         rates["match_directors_non_sole_prop_companies"] = div(with_dir, pop)
         rates["match_rge_establishments"] = div(rge_est, exportable)
+        # First-test-lot KPIs asked by the client (company level; report only). Denominators are named in the metric.
+        comp, proven, with_person, social = one("""SELECT count(*),
+              count(*) FILTER (WHERE EXISTS (SELECT 1 FROM company_contacts k WHERE k.company_id=c.company_id AND k.contact_type='website'
+                                             AND k.match_proof IS NOT NULL)),
+              count(*) FILTER (WHERE EXISTS (SELECT 1 FROM company_interlocutors i WHERE i.company_id=c.company_id AND i.is_active)),
+              count(*) FILTER (WHERE EXISTS (SELECT 1 FROM company_contacts k WHERE k.company_id=c.company_id
+                                             AND k.contact_type IN ('social','linkedin') AND k.value_status<>'unavailable'))
+            FROM companies c WHERE c.status='active' AND c.is_diffusible""")
+        dirs, d_mobile, d_email, d_email_any, d_conf = one("""SELECT count(*),
+              count(*) FILTER (WHERE EXISTS (SELECT 1 FROM company_contacts k WHERE k.interlocutor_id=i.interlocutor_id
+                    AND k.contact_type='phone' AND k.value_normalized ~ '^\\+33[67]' AND k.value_status IN ('verified','sourced'))),
+              count(*) FILTER (WHERE EXISTS (SELECT 1 FROM company_contacts k WHERE k.interlocutor_id=i.interlocutor_id
+                    AND k.contact_type='email' AND k.value_status='verified')),
+              count(*) FILTER (WHERE EXISTS (SELECT 1 FROM company_contacts k WHERE k.interlocutor_id=i.interlocutor_id
+                    AND k.contact_type='email' AND k.value_status<>'unavailable')),
+              count(*) FILTER (WHERE i.decision_maker_confirmed)
+            FROM company_interlocutors i JOIN companies c ON c.company_id=i.company_id AND c.status='active' AND c.is_diffusible
+            WHERE i.is_active AND i.function_category='director'""")
+        rates["match_companies_with_proven_website"] = div(proven, comp)
+        rates["match_companies_with_interlocutor"] = div(with_person, comp)
+        rates["match_companies_with_social_account"] = div(social, comp)
+        rates["match_directors_with_mobile_linked"] = div(d_mobile, dirs)          # mobile attached to the person (with evidence), not just the company
+        rates["match_directors_with_verified_email_linked"] = div(d_email, dirs)   # deliverable per verifier + attached to the person
+        rates["match_directors_with_any_email_linked"] = div(d_email_any, dirs)    # includes provider hypotheses ('inferred')
+        rates["match_directors_decision_maker_confirmed"] = div(d_conf, dirs)
     m = {"active": active, "exportable": exportable, "coverage": (exportable / active if active else 0.0),
          "target_rows": target_rows, "volume_vs_target": exportable / target_rows if target_rows else 0.0,
          "geocode_threshold": threshold_note}
