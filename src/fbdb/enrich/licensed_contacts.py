@@ -34,6 +34,7 @@ from typing import Optional
 
 import psycopg
 
+from fbdb.common.provenance import record_conflict
 from fbdb.transform.normalize import (
     is_valid_siren, is_valid_siret, normalize_domain, normalize_email, normalize_phone_fr,
 )
@@ -149,6 +150,14 @@ def store_contact(cur, company_id, establishment_id, ctype, raw, norm, status, s
         "SELECT 1 FROM company_contacts WHERE company_id = %s AND contact_type = %s "
         "AND establishment_id IS NOT DISTINCT FROM %s AND is_primary", (company_id, ctype, establishment_id))
     has_primary = cur.fetchone() is not None
+    if ctype == "website":
+        # a company has one official website: a different value from another source is kept for review, not dropped
+        cur.execute(
+            "SELECT value_normalized, source_id FROM company_contacts WHERE company_id = %s AND contact_type = 'website' "
+            "AND value_normalized <> %s ORDER BY is_primary DESC, contact_id LIMIT 1", (company_id, norm))
+        other = cur.fetchone()
+        if other:
+            record_conflict(cur, company_id, "website", other[0], other[1], norm, source_id, establishment_id)
     cur.execute(
         "INSERT INTO company_contacts (company_id, establishment_id, contact_type, value, value_normalized, is_primary, "
         "value_status, source_id, last_verified_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s, now())",

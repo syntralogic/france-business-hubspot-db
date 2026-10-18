@@ -96,3 +96,13 @@ def test_requires_contract_reference(db, tmp_path, monkeypatch):
     with pytest.raises(lc.LicenceError):
         lc.run(DSN, write(tmp_path, "siren,phone\n"), None, reject_dir=tmp_path)
     assert q("SELECT count(*) FROM import_export_batches")[0][0] == 0
+
+
+def test_different_website_is_recorded_as_conflict(db, tmp_path):
+    siret = luhn_siret(A)
+    lc.run(DSN, write(tmp_path, f"siret;website\n{siret};https://www.alpha.fr\n"), "TEST-1", reject_dir=tmp_path)
+    lc.run(DSN, write(tmp_path, f"siret;website\n{siret};https://www.alpha-autre.fr\n"), "TEST-1", reject_dir=tmp_path)
+    rows = q("SELECT field_name, kept_value, other_value FROM field_conflicts")
+    assert rows == [("website", "alpha.fr", "alpha-autre.fr")]
+    # both values are kept as contacts; nothing is lost
+    assert q("SELECT count(*) FROM company_contacts WHERE contact_type='website'")[0][0] == 2
