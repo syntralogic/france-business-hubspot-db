@@ -6,7 +6,8 @@ No SIREN on the site -> nothing is stored: a name or a town is not a proof. Soci
 YouTube, X) are taken from the SAME proven site only, so each one has the same proof.
 
 Candidates: existing 'website' contacts of the company (for example from the licensed file) that are not proven yet.
-Discovery by web search is not done here: it is the biggest source of wrong matches, add it only with a labelled test sample.
+Discovery by web search lives in fbdb.enrich.website_discovery: it only proposes candidate URLs and every one still has to pass
+this same SIREN proof (it is the biggest source of wrong matches, so measure it on a labelled sample before trusting it).
 
 Firecrawl v1 scrape: POST https://api.firecrawl.dev/v1/scrape, Bearer key, body {"url", "formats": ["markdown", "links"]},
 answer {"success", "data": {"markdown", "links"}}. NOT verified against a live key from the build sandbox (blocked): run `--limit 5`
@@ -32,6 +33,7 @@ from fbdb.transform.normalize import is_valid_siren, is_valid_siret
 
 log = logging.getLogger("fbdb.website")
 BASE = os.environ.get("FIRECRAWL_BASE", "https://api.firecrawl.dev/v1/scrape")
+SEARCH_BASE = os.environ.get("FIRECRAWL_SEARCH_BASE", "https://api.firecrawl.dev/v1/search")
 DAILY_CAP = int(os.environ.get("FIRECRAWL_DAILY_CAP", "100"))
 PROVIDER = "firecrawl"
 MAX_PAGES = 3
@@ -146,6 +148,25 @@ class FirecrawlClient:
         if not body.get("success", True) or not data:
             return None
         return {"markdown": data.get("markdown") or "", "links": data.get("links") or []}
+
+    @retry(retry=retry_if_exception_type((RetryableError, httpx.TransportError)),
+           wait=wait_exponential(multiplier=2, min=2, max=60), stop=stop_after_attempt(3), reraise=True)
+    def search(self, query: str, limit: int = 5) -> list[str]:
+        """Result URLs of a web search, best first ([] when nothing). Firecrawl v1 search: POST /v1/search,
+        body {"query", "limit", "lang", "country"}, answer {"success", "data": [{"url", "title", "description"}]}.
+        NOT verified against a live key from the build sandbox (blocked)."""
+        r = self._http.post(SEARCH_BASE, headers={"Authorization": f"Bearer {self._key}"},
+                            json={"query": query, "limit": limit, "lang": "fr", "country": "fr"})
+        if r.status_code in (401, 402, 403):
+            raise QuotaExhausted(f"Firecrawl HTTP {r.status_code}: invalid key or no credits left")
+        if r.status_code == 429 or r.status_code >= 500:
+            raise RetryableError(f"HTTP {r.status_code}")
+        if r.status_code >= 400:
+            return []
+        body = r.json()
+        if not body.get("success", True):
+            return []
+        return [d["url"] for d in (body.get("data") or []) if isinstance(d, dict) and d.get("url")]
 
 
 def check_site(client, siren: str, site_url: str, reserve=lambda: True) -> dict:

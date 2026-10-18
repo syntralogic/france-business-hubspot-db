@@ -104,7 +104,7 @@ def flat(ul_row, et_row):
 def db(tmp_path_factory):
     with psycopg.connect(DSN, autocommit=True) as conn:
         conn.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
-        for f in ("000_reference_data.sql", "001_schema.sql", "002_staging.sql", "003_pipeline_state.sql",
+        for f in ("000_reference_data.sql", "001_schema.sql", "002_staging.sql", "003_pipeline_state.sql", "003a_provenance.sql",
                   "004_export_view.sql", "006_closure_date.sql"):
             conn.execute((SQL_DIR / f).read_text(encoding="utf-8"))
     tmp = tmp_path_factory.mktemp("sirene")
