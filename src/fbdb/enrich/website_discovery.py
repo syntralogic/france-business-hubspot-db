@@ -25,7 +25,7 @@ from urllib.parse import urlparse
 import psycopg
 
 from fbdb.common import usage
-from fbdb.enrich.website import DAILY_CAP, LEGAL_HINTS, PROVIDER, FirecrawlClient, QuotaExhausted, check_site, store
+from fbdb.enrich.website import DAILY_CAP, LEGAL_HINTS, PROVIDER, FirecrawlClient, QuotaExhausted, check_site, store, store_extracted
 from fbdb.transform.normalize import normalize_domain
 
 log = logging.getLogger("fbdb.website_discovery")
@@ -145,6 +145,7 @@ def store_discovery(cur, company_id: int, query: str, found: dict, source_id: in
                VALUES (%s,'website',%s,%s,TRUE,'sourced',%s, now()) RETURNING contact_id""",
             (company_id, found["site_url"], normalize_domain(found["site_url"]) or _host(found["site_url"]), source_id))
         n = store(cur, cur.fetchone()[0], company_id, found["result"], source_id)
+        store_extracted(cur, company_id, found["result"], source_id)
     cur.execute(
         """INSERT INTO website_searches (company_id, searched_at, query_text, candidates_checked, outcome)
            VALUES (%s, now(), %s, %s, %s)

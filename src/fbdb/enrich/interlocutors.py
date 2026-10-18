@@ -89,6 +89,29 @@ def upsert_interlocutor(cur, company_id: int, last_name: str, first_name: Option
     return cur.fetchone()[0]
 
 
+def attach_person(cur, company_id: int, last_name: str, first_name: Optional[str], function: Optional[str],
+                  match_proof: Optional[str] = None, source_code: str = "team_page", source_url: Optional[str] = None):
+    """Person read on a website: reuse the SAME person already known (for example the register director) instead of a duplicate.
+
+    Returns (interlocutor_id, created). An existing person only gets the function/proof filled in when they had none.
+    """
+    cur.execute("SELECT interlocutor_id, operational_function FROM company_interlocutors WHERE company_id = %s "
+                "AND lower(last_name) = lower(%s) AND lower(coalesce(first_name, '')) = lower(%s) "
+                "ORDER BY is_active DESC, interlocutor_id LIMIT 1", (company_id, last_name, first_name or ""))
+    row = cur.fetchone()
+    if row:
+        if row[1] is None and function:
+            cur.execute("UPDATE company_interlocutors SET operational_function = %s, function_category = CASE WHEN function_category IN "
+                        "('unknown','other') THEN %s ELSE function_category END, source_url = coalesce(source_url, %s), "
+                        "match_proof = coalesce(match_proof, %s), last_verified_at = now() WHERE interlocutor_id = %s",
+                        (function, classify_function(function), source_url, match_proof, row[0]))
+        else:
+            cur.execute("UPDATE company_interlocutors SET last_verified_at = now() WHERE interlocutor_id = %s", (row[0],))
+        return row[0], False
+    return upsert_interlocutor(cur, company_id, last_name, first_name, function, match_proof=match_proof,
+                               source_code=source_code, source_url=source_url), True
+
+
 def link_contact(cur, company_id: int, interlocutor_id: int, ctype: str, value: str, evidence: str,
                  use: Optional[str] = None) -> int:
     """Attach an EXISTING phone/email of the company to a person. Never creates the value and never downgrades evidence.

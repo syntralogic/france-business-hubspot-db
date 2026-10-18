@@ -29,6 +29,8 @@ import psycopg
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from fbdb.common import usage
+from fbdb.enrich import site_extract
+from fbdb.enrich.interlocutors import attach_person, link_contact
 from fbdb.transform.normalize import is_valid_siren, is_valid_siret
 
 log = logging.getLogger("fbdb.website")
@@ -36,7 +38,7 @@ BASE = os.environ.get("FIRECRAWL_BASE", "https://api.firecrawl.dev/v1/scrape")
 SEARCH_BASE = os.environ.get("FIRECRAWL_SEARCH_BASE", "https://api.firecrawl.dev/v1/search")
 DAILY_CAP = int(os.environ.get("FIRECRAWL_DAILY_CAP", "100"))
 PROVIDER = "firecrawl"
-MAX_PAGES = 3
+MAX_PAGES = 4          # home + legal page(s) until the SIREN proof, then at most the contact/team pages
 LEGAL_HINTS = ("mention", "legal", "cgv", "cgu", "a-propos", "apropos", "about", "contact", "societe", "qui-sommes")
 _SEP = r"[ \u00a0\u202f.\-]?"
 SIREN_RE = re.compile(rf"(?<!\d)(\d{{3}}){_SEP}(\d{{3}}){_SEP}(\d{{3}})(?:{_SEP}(\d{{5}}))?(?!\d)")
@@ -104,7 +106,7 @@ def social_links(links: list[str]) -> dict[str, str]:
     return out
 
 
-def legal_pages(base_url: str, links: list[str], limit: int = MAX_PAGES - 1) -> list[str]:
+def legal_pages(base_url: str, links: list[str], limit: int = 2) -> list[str]:
     """Same-site pages that are likely to carry the legal notice, best hints first."""
     host = (urlparse(base_url).hostname or "").removeprefix("www.")
     scored = []
@@ -170,13 +172,15 @@ class FirecrawlClient:
 
 
 def check_site(client, siren: str, site_url: str, reserve=lambda: True) -> dict:
-    """Scrape the home page then the likely legal pages (stop at the first proof). Pure of the database.
+    """Scrape the home page, then the likely legal pages until the SIREN proof; once proven, also the contact/team pages.
 
-    `reserve()` is called before every scrape and returns False when the daily cap is reached.
-    Returns {"proven": bool, "proof": str|None, "proof_url": str|None, "socials": {...}, "pages": n, "cap_reached": bool}.
+    Pure of the database. `reserve()` is called before every scrape and returns False when the daily cap is reached.
+    Returns {"proven", "proof", "proof_url", "socials", "pages", "cap_reached", "phones", "emails", "people"}; phones, emails
+    and people are read from every page scraped, and ONLY when the site is proven (each item keeps the page URL it came from).
     """
-    res = {"proven": False, "proof": None, "proof_url": None, "socials": {}, "pages": 0, "cap_reached": False}
-    queue, seen, links_all = [site_url], set(), []
+    res = {"proven": False, "proof": None, "proof_url": None, "socials": {}, "pages": 0, "cap_reached": False,
+           "phones": [], "emails": [], "people": []}
+    queue, seen, links_all, scraped = [site_url], set(), [], []
     while queue and res["pages"] < MAX_PAGES:
         url = queue.pop(0)
         if url in seen:
@@ -190,12 +194,30 @@ def check_site(client, siren: str, site_url: str, reserve=lambda: True) -> dict:
         if not page:
             continue
         links_all += page["links"]
-        if siren in find_sirens(page["markdown"]):
-            res.update(proven=True, proof=proof_sentence(page["markdown"], siren), proof_url=url)
-            res["socials"] = social_links(links_all)
-            return res
-        if url == site_url:
-            queue += legal_pages(site_url, page["links"])
+        scraped.append((url, page))
+        if not res["proven"]:
+            if siren in find_sirens(page["markdown"]):
+                res.update(proven=True, proof=proof_sentence(page["markdown"], siren), proof_url=url)
+                queue = [u for u in site_extract.contact_pages(site_url, links_all) if u not in seen]
+            elif url == site_url:
+                queue += legal_pages(site_url, page["links"])
+    if res["proven"]:
+        res["socials"] = social_links(links_all)
+        for url, page in scraped:
+            for key, fn in (("phones", site_extract.extract_phones), ("emails", site_extract.extract_emails)):
+                known = {i["normalized"] for i in res[key]}
+                res[key] += [{**i, "url": url} for i in fn(page["markdown"], page["links"]) if i["normalized"] not in known]
+            for p in site_extract.extract_people(page["markdown"]):
+                same = next((q for q in res["people"] if (q["first_name"].lower(), q["last_name"].lower())
+                             == (p["first_name"].lower(), p["last_name"].lower())), None)
+                if same is None:
+                    res["people"].append({**p, "url": url})
+                    continue
+                # same person on another page: keep every contact the pages put next to them, and a function if we had none
+                same["phones"] += [v for v in p["phones"] if v not in same["phones"]]
+                same["emails"] += [v for v in p["emails"] if v not in same["emails"]]
+                if not same.get("function") and p.get("function"):
+                    same.update(function=p["function"], line=p["line"], rule=p["rule"], url=url)
     return res
 
 
@@ -234,9 +256,53 @@ def store(cur, contact_id: int, company_id: int, result: dict, source_id: int) -
     return n
 
 
+def _put_contact(cur, company_id: int, ctype: str, item: dict, source_id: int, site_proof: str):
+    """Insert a phone/email read on the proven site. Returns (contact_id, added). Existing values are never touched."""
+    cur.execute("SELECT contact_id FROM company_contacts WHERE company_id = %s AND contact_type = %s AND value_normalized = %s",
+                (company_id, ctype, item["normalized"]))
+    row = cur.fetchone()
+    if row:
+        return row[0], False
+    cur.execute("SELECT 1 FROM company_contacts WHERE company_id = %s AND contact_type = %s AND establishment_id IS NULL AND is_primary",
+                (company_id, ctype))
+    has_primary = cur.fetchone() is not None
+    proof = f"{ctype} written on {item['url']}: {item['context'][:120]} | {site_proof}"
+    cur.execute(
+        """INSERT INTO company_contacts (company_id, contact_type, value, value_normalized, is_primary, value_status, source_id,
+                 match_proof, match_url, contact_use, last_verified_at)
+           VALUES (%s,%s,%s,%s,%s,'sourced',%s,%s,%s,%s, now()) RETURNING contact_id""",
+        (company_id, ctype, item["value"], item["normalized"], not has_primary, source_id, proof, item["url"], item.get("use")))
+    return cur.fetchone()[0], True
+
+
+def store_extracted(cur, company_id: int, result: dict, source_id: int) -> dict:
+    """Phones, emails and people read on a PROVEN site. A phone/email is linked to a person only when the page puts it next to
+    that person's name (evidence `published_with_name`); every other value stays 'company - person not identified'."""
+    stats = {"phones": 0, "emails": 0, "people": 0, "person_links": 0}
+    if not result.get("proven"):
+        return stats
+    site_proof = "website proven by SIREN: " + (result.get("proof") or "")
+    for key, ctype in (("phones", "phone"), ("emails", "email")):
+        for item in result.get(key) or []:
+            stats[key] += _put_contact(cur, company_id, ctype, item, source_id, site_proof)[1]
+    for p in result.get("people") or []:
+        pid, new = attach_person(cur, company_id, p["last_name"], p["first_name"], p.get("function"),
+                                 match_proof=f"{p['rule']}: {p['line']} | {site_proof}", source_url=p["url"])
+        stats["people"] += new
+        for ctype, values in (("phone", p["phones"]), ("email", p["emails"])):
+            for value in values:
+                try:
+                    link_contact(cur, company_id, pid, ctype, value, "published_with_name")
+                    stats["person_links"] += 1
+                except ValueError as exc:      # value held under another person: leave it for a human
+                    log.info("not linked %s to %s: %s", value, p["last_name"], exc)
+    return stats
+
+
 def run(dsn: str, client=None, limit: int = 100, refresh_days: int = 90, cap: int = DAILY_CAP) -> dict:
     client = client or FirecrawlClient()
-    stats = {"read": 0, "proven": 0, "not_proven": 0, "socials_added": 0, "errors": 0, "cap_reached": False, "stopped_no_credits": False}
+    stats = {"read": 0, "proven": 0, "not_proven": 0, "socials_added": 0, "phones_added": 0, "emails_added": 0, "people_added": 0,
+             "person_links": 0, "errors": 0, "cap_reached": False, "stopped_no_credits": False}
     with psycopg.connect(dsn) as conn:
         source_id = conn.execute("SELECT source_id FROM data_sources WHERE code='website'").fetchone()[0]
         for contact_id, company_id, siren, value in conn.execute(SELECT_DUE, {"days": refresh_days, "limit": limit}).fetchall():
@@ -256,6 +322,9 @@ def run(dsn: str, client=None, limit: int = 100, refresh_days: int = 90, cap: in
                 break
             with conn.cursor() as cur:
                 stats["socials_added"] += store(cur, contact_id, company_id, res, source_id)
+                ex = store_extracted(cur, company_id, res, source_id)
+                stats["phones_added"] += ex["phones"]; stats["emails_added"] += ex["emails"]
+                stats["people_added"] += ex["people"]; stats["person_links"] += ex["person_links"]
             stats["proven" if res["proven"] else "not_proven"] += 1
             conn.commit()
     return stats

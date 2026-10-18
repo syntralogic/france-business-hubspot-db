@@ -7,6 +7,7 @@ confirmed with `--limit 5` and the log read.
 | Module | Provider | Paid | What it stores |
 |---|---|---|---|
 | `fbdb.enrich.website` | Firecrawl | yes | website marked `verified` ONLY if our SIREN is on the site; proof in `match_proof`/`match_url`; social links found on that site |
+| `fbdb.enrich.site_extract` | - (reads pages already scraped by `website`) | no | phones (tel:/text), emails (mailto:/text), named people (legal-notice formulas, name next to a function) from a site PROVEN by SIREN |
 | `fbdb.enrich.email_verify` | Hunter | yes | verdict in `verify_result`; invalid/disposable -> `unavailable` |
 | `fbdb.enrich.phone_lookup` | Twilio Lookup | yes | `line_type`; invalid number -> `unavailable` |
 | `fbdb.enrich.certifications` | licence/client CSV | contract | Qualibat, Qualifelec, Qualit'EnR, RC pro, Decennale (RGE stays in `ademe_rge`) |
@@ -49,4 +50,11 @@ python -m fbdb.enrich.interlocutors list --siren 552100554
 - A number or email is linked to a person only with `published_with_name`, `provider_attributed` or `confirmed_by_contact` (database CHECK). Without a link it stays "company - person not identified". A link never creates a value, never downgrades evidence and refuses a value already owned by another person.
 - `decision_maker_confirmed` needs a note and a date (database CHECK): a job title is not proof.
 - View `v_interlocutor_contacts` (one row per person x contact) hides values opposed on the call/email channel. The HubSpot company view is unchanged (still one phone/email per company).
-- Not built yet: automatic extraction of team pages (the website module does not yet read team/contact pages for names), and a HubSpot export of the extra contacts.
+
+## Phones, emails and people read from the official site (spec sections 5-8)
+`fbdb.enrich.website` (and `website_discovery`) now keep going after the SIREN proof: they scrape up to 2 more same-site pages named contact / equipe / a-propos / ... (total max 4 pages per site, still inside `FIRECRAWL_DAILY_CAP`), then `site_extract` reads every scraped page.
+- Only a site PROVEN by SIREN feeds this; nothing is stored from an unproven site.
+- Phones and emails go to `company_contacts` (`value_status = sourced`, source `website`, `match_url` = the page, `match_proof` = the line + the SIREN proof, `contact_use` guessed from the label or address: switchboard / direction / sales / emergency / after_sales / accounting / recruitment / general). A number on a page without a name stays "company - person not identified" (never the director's mobile by default). Existing values are never modified.
+- People: legal-notice formulas ("Directeur de la publication : ...") and a name next to a function keyword. The same person already known (register director) is reused, not duplicated. A phone/email is linked to a person (`published_with_name`) only when it sits on the person's line or on the line right after it.
+- Email verification (`email_verify`) and line type (`phone_lookup`) pick the new values up automatically.
+- The name heuristic is NOT validated on real sites: run `python -m fbdb.enrich.website --limit 5`, read the people found, and label ~50 sites by hand to measure precision before using `function_category` for targeting.
