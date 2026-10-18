@@ -58,3 +58,10 @@ python -m fbdb.enrich.interlocutors list --siren 552100554
 - People: legal-notice formulas ("Directeur de la publication : ...") and a name next to a function keyword. The same person already known (register director) is reused, not duplicated. A phone/email is linked to a person (`published_with_name`) only when it sits on the person's line or on the line right after it.
 - Email verification (`email_verify`) and line type (`phone_lookup`) pick the new values up automatically.
 - The name heuristic is NOT validated on real sites: run `python -m fbdb.enrich.website --limit 5`, read the people found, and label ~50 sites by hand to measure precision before using `function_category` for targeting.
+
+## HubSpot Contacts export (people)
+`python -m fbdb.export.hubspot_contacts --out data/exports` (also a step in `scripts/run_weekly.sh`, same `EXPORT_AFTER_WEEKLY` switch) writes `hubspot_contacts_<date>_partNN.csv` from the view `v_hubspot_contacts` (`sql/014`).
+- One row per ACTIVE interlocutor with at least one usable value. Only values linked to that person are used; `verified`/`sourced` only; nothing opposed on the channel (email -> email, phone -> call); invalid values are blanked again at export.
+- `+336/+337` goes to "Mobile Phone Number", any other phone to "Phone Number" (prefix hint, not proof of ownership). The evidence level of each value is exported (`Preuve email/telephone/mobile`); when several values compete for a slot the best evidence wins.
+- "Company domain name" is the proven website; without one the contact is associated by company name + the custom property SIREN. Create the custom properties (SIREN, Fonction categorie, Decideur confirme, Preuve email, Preuve telephone, Preuve mobile) before the import, and test with 100 rows first like the companies import.
+- SMS tools must still read `contact_oppositions` / `phone_sms_allowed`: this CSV is a call/email export.

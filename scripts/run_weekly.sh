@@ -45,6 +45,11 @@ if [ "${EXPORT_AFTER_WEEKLY:-1}" = 1 ]; then
   step export python -m fbdb.export.run_export "${EXPORT_ARGS[@]}"
 else skip export "EXPORT_AFTER_WEEKLY=0"; fi
 
+# HubSpot Contacts export (people with their own email/phone/mobile; empty file set when nobody is known yet)
+if [ "${EXPORT_AFTER_WEEKLY:-1}" = 1 ]; then
+  step export_contacts python -m fbdb.export.hubspot_contacts --out "data/exports/$(date +%F)"
+else skip export_contacts "EXPORT_AFTER_WEEKLY=0"; fi
+
 # Housekeeping: keep 90 days of logs, 8 weeks of export folders
 find data/exports -mindepth 1 -maxdepth 1 -type d -mtime +56 -exec rm -rf {} + 2>/dev/null || true
 find reports -maxdepth 1 -name 'run_*.log' -mtime +90 -delete 2>/dev/null || true
