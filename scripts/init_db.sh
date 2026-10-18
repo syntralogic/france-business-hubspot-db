@@ -12,14 +12,14 @@ if [ -z "${DATABASE_URL:-}" ] && [ -f .env ]; then set -a; source .env; set +a; 
 export PGOPTIONS="${PGOPTIONS:-} -c client_min_messages=warning"   # hide "already exists, skipping" notices
 run() { psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f "$1"; echo "applied $1"; }
 
+# Same rule as src/fbdb/schema.py: every sql/*.sql in byte order (so a new file can never be forgotten here);
+# an existing database skips 001 (core tables are never re-run), all other files are idempotent.
+mapfile -t files < <(LC_ALL=C ls sql/*.sql)
 if [ "$(psql "$DATABASE_URL" -tAc "SELECT to_regclass('public.companies') IS NOT NULL")" = "t" ]; then
   echo "Existing schema detected: upgrading with the idempotent files only."
-  files=(sql/000_reference_data.sql sql/002_staging.sql sql/003_pipeline_state.sql sql/004_export_view.sql
-         sql/005_directors_enrichment.sql sql/006_closure_date.sql sql/007_geocoding.sql sql/008_bodacc.sql sql/009_inpi.sql sql/010_paid_enrichment.sql sql/011_ops.sql)
+  mapfile -t files < <(printf '%s\n' "${files[@]}" | grep -v '/001_schema\.sql$')
 else
   echo "Empty database: creating the full schema."
-  files=(sql/000_reference_data.sql sql/001_schema.sql sql/002_staging.sql sql/003_pipeline_state.sql
-         sql/004_export_view.sql sql/005_directors_enrichment.sql sql/006_closure_date.sql sql/007_geocoding.sql sql/008_bodacc.sql sql/009_inpi.sql sql/010_paid_enrichment.sql sql/011_ops.sql)
 fi
 for f in "${files[@]}"; do run "$f"; done
 echo "Schema ready."
