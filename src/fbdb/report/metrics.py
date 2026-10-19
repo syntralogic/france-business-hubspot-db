@@ -143,6 +143,10 @@ def collect(dsn: str, threshold_note: float = 0.6, target_rows: int = 500_000) -
         with_claims = one("""SELECT count(*) FROM companies c WHERE c.status='active' AND c.is_diffusible
               AND EXISTS (SELECT 1 FROM company_activities a WHERE a.company_id=c.company_id)""")[0]
         rates["match_companies_with_activity_claims"] = div(with_claims, comp)
+        # service area / team size DECLARED on the proven site (company_site_declarations): none = "nothing found", never "works nowhere"
+        with_decl = one("""SELECT count(*) FROM companies c WHERE c.status='active' AND c.is_diffusible
+              AND EXISTS (SELECT 1 FROM company_site_declarations d WHERE d.company_id=c.company_id AND d.kind <> 'team_size')""")[0]
+        rates["match_companies_with_declared_service_area"] = div(with_decl, comp)
         # public contracts found in the loaded DECP files (a company without one is "none in loaded datasets", never "never worked for the public sector")
         with_contracts = one("""SELECT count(*) FROM companies c WHERE c.status='active' AND c.is_diffusible
               AND EXISTS (SELECT 1 FROM public_contracts p WHERE p.company_id=c.company_id)""")[0]

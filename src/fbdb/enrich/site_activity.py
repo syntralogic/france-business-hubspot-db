@@ -32,6 +32,7 @@ import psycopg
 
 from fbdb.common import usage
 from fbdb.enrich.activity_rules import extract_activities, merge_pages
+from fbdb.enrich.declaration_rules import extract_declarations, merge_declarations
 from fbdb.enrich.website import DAILY_CAP, PROVIDER, FirecrawlClient, QuotaExhausted
 
 log = logging.getLogger("fbdb.site_activity")
@@ -75,7 +76,7 @@ def read_site(client, site_url: str, reserve=lambda: True) -> dict:
     Returns {"outcome": "extracted"|"nothing_found"|"inaccessible", "items": [...], "pages_read": n, "cap_reached": bool}.
     Items are merged page by page (home first): the first page that states a claim keeps it.
     """
-    out = {"outcome": "inaccessible", "items": [], "pages_read": 0, "cap_reached": False}
+    out = {"outcome": "inaccessible", "items": [], "declarations": [], "pages_read": 0, "cap_reached": False}
     if not reserve():
         out["cap_reached"] = True
         return out
@@ -84,6 +85,7 @@ def read_site(client, site_url: str, reserve=lambda: True) -> dict:
     if not home:
         return out
     per_page = [extract_activities(home["markdown"], site_url)]
+    decl_pages = [extract_declarations(home["markdown"], site_url)]
     for url in activity_pages(site_url, home["links"]):
         if not reserve():
             out["cap_reached"] = True
@@ -93,8 +95,10 @@ def read_site(client, site_url: str, reserve=lambda: True) -> dict:
             continue
         out["pages_read"] += 1
         per_page.append(extract_activities(page["markdown"], url))
+        decl_pages.append(extract_declarations(page["markdown"], url))
     out["items"] = merge_pages(per_page)
-    out["outcome"] = "extracted" if out["items"] else "nothing_found"
+    out["declarations"] = merge_declarations(decl_pages)
+    out["outcome"] = "extracted" if (out["items"] or out["declarations"]) else "nothing_found"
     return out
 
 
@@ -121,6 +125,13 @@ def store(cur, company_id: int, result: dict, site_proof: str, source_id: int) -
     """Upsert the claims and remember the read. An existing claim keeps its first passage and URL (only last_seen_at moves);
     nothing is deleted. Returns the number of NEW claims."""
     new = 0
+    for d in result.get("declarations") or []:
+        cur.execute(
+            """INSERT INTO company_site_declarations (company_id, kind, value, number, qualifier, matched_text, passage, source_url,
+                 site_proof, source_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+               ON CONFLICT (company_id, kind, value) DO UPDATE SET last_seen_at = now() RETURNING (xmax = 0)""",
+            (company_id, d["kind"], d["value"], d["number"], d["qualifier"], d["matched_text"], d["passage"], d["url"], site_proof, source_id))
+        new += bool(cur.fetchone()[0])
     for it in result["items"]:
         cur.execute(
             """INSERT INTO company_activities (company_id, facet, code, label, matched_text, passage, source_url, site_proof, source_id)
@@ -133,7 +144,7 @@ def store(cur, company_id: int, result: dict, site_proof: str, source_id: int) -
         """INSERT INTO activity_runs (company_id, searched_at, pages_read, outcome, items_found) VALUES (%s, now(), %s, %s, %s)
            ON CONFLICT (company_id) DO UPDATE SET searched_at = now(), pages_read = EXCLUDED.pages_read,
              outcome = EXCLUDED.outcome, items_found = EXCLUDED.items_found""",
-        (company_id, result["pages_read"], result["outcome"], len(result["items"])))
+        (company_id, result["pages_read"], result["outcome"], len(result["items"]) + len(result.get("declarations") or [])))
     return new
 
 
@@ -168,7 +179,8 @@ def run(dsn: str, client=None, limit: int = 5, refresh_days: int = 180, retry_da
                 stats["claims_added"] += store(cur, company_id, res, site_proof, source_id) if not res["cap_reached"] else 0
             conn.commit()
             stats[res["outcome"]] += 1
-            log.info("%s: %s, %d claim(s), %d page(s)", siren, res["outcome"], len(res["items"]), res["pages_read"])
+            log.info("%s: %s, %d claim(s), %d declaration(s), %d page(s)", siren, res["outcome"], len(res["items"]),
+                     len(res["declarations"]), res["pages_read"])
             if res["cap_reached"]:
                 break
     return stats

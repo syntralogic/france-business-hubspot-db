@@ -139,3 +139,53 @@ def test_activity_kpi_counts_companies_with_claims_only(db):
     sa.run(DSN, client=Fake(PAGES), limit=10)
     _, rates = metrics.collect(DSN, target_rows=10)
     assert round(rates["match_companies_with_activity_claims"], 3) == round(1 / 3, 3)
+
+
+DECL_PAGES = {
+    HOME: {"markdown": "Électricien. Nous intervenons à Lyon, Villeurbanne et dans le Rhône (69). Une équipe de 12 personnes.\n"
+                       "Nous intervenons dans un rayon de 30 km autour de Lyon.", "links": []},
+}
+
+
+def test_declared_service_area_and_team_size_are_stored_as_claims_apart_from_official_data(db):
+    sa.run(DSN, client=Fake(DECL_PAGES), limit=10)
+    rows = {(r[0], r[1]): r[2:] for r in q("SELECT kind, value, number, qualifier, passage, source_url, site_proof FROM company_site_declarations")}
+    assert ("service_area_place", "Lyon") in rows and ("service_area_place", "Rhône (69)") in rows
+    assert rows[("service_area_radius_km", "30 km autour de Lyon")][0] == 30
+    size = rows[("team_size", "12")]
+    assert size[0] == 12 and size[1] == "exact" and "équipe de 12" in size[2] and size[3] == HOME and size[4] == PROOF
+    # the declared size is NOT mixed with official figures, and the address table is untouched
+    assert q("SELECT count(*) FROM company_financials")[0][0] == 0
+    assert q("SELECT count(*) FROM company_addresses")[0][0] == 0
+    assert q("SELECT outcome FROM activity_runs") == [("extracted",)]
+
+
+def test_declarations_refresh_moves_last_seen_only_and_a_changed_size_is_a_new_row(db):
+    sa.run(DSN, client=Fake(DECL_PAGES), limit=10)
+    q("SELECT 1")
+    with psycopg.connect(DSN, autocommit=True) as conn:
+        conn.execute("UPDATE activity_runs SET searched_at = now() - interval '400 days'")
+        conn.execute("UPDATE company_site_declarations SET last_seen_at = now() - interval '400 days'")
+    changed = {HOME: {"markdown": "Électricien. Une équipe de 15 personnes.", "links": []}}
+    sa.run(DSN, client=Fake(changed), limit=10)
+    sizes = q("SELECT value FROM company_site_declarations WHERE kind='team_size' ORDER BY value")
+    assert sizes == [("12",), ("15",)]                                  # nothing overwritten or deleted
+    assert q("SELECT count(*) FROM company_site_declarations WHERE kind='service_area_place' AND last_seen_at < now() - interval '300 days'")[0][0] == 3
+
+
+def test_declaration_constraints_and_idempotent_migration(db):
+    with psycopg.connect(DSN, autocommit=True) as conn:
+        cid = conn.execute("SELECT company_id FROM companies WHERE siren=%s", (A,)).fetchone()[0]
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute("INSERT INTO company_site_declarations (company_id, kind, value, passage, source_url) VALUES (%s,'revenue','1','p','u')", (cid,))
+        with pytest.raises(psycopg.errors.NotNullViolation):               # no passage, no declaration
+            conn.execute("INSERT INTO company_site_declarations (company_id, kind, value, source_url) VALUES (%s,'team_size','4','u')", (cid,))
+        sql = (SQL_DIR / "025_site_declarations.sql").read_text(encoding="utf-8")
+        conn.execute(sql)
+        conn.execute(sql)
+
+
+def test_service_area_kpi_counts_companies_with_a_declared_area_only(db):
+    sa.run(DSN, client=Fake(DECL_PAGES), limit=10)
+    _, rates = metrics.collect(DSN, target_rows=10)
+    assert round(rates["match_companies_with_declared_service_area"], 3) == round(1 / 3, 3)
