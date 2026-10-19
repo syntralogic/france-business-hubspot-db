@@ -16,7 +16,7 @@ def test_read_rows_aliases_dates_and_bad_sirets(tmp_path):
     p.write_text(CSV, encoding="utf-8")
     rows = list(read_rows(p))
     assert rows[0] == {"siret": "82454695600023", "raw_siret": "82454695600023", "label": "QualiPAC (Pompe a chaleur)",
-                       "valid_from": date(2024, 1, 15), "valid_to": date(2026, 1, 14)}
+                       "valid_from": date(2024, 1, 15), "valid_to": date(2026, 1, 14), "url": None}   # no link column in this file
     assert rows[1]["siret"] == "" and rows[1]["valid_from"] == date(2023, 2, 15) and rows[1]["valid_to"] is None
     assert rows[2]["siret"] == "" and rows[2]["label"] == "Solaire"
 
