@@ -1,4 +1,4 @@
--- Certifications: which file each row came from, when it was last seen, and what "no certification" means (spec section 10).
+-- Certifications: which file each row came from, when it was last seen, and what "no certification" means (spec section 11).
 -- Idempotent.
 
 INSERT INTO data_sources(code,name,priority,is_official,update_freq,licence_notes) VALUES

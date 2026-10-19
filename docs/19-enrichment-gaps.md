@@ -183,7 +183,7 @@ Migration `sql/003b_financials_exercice.sql` (numbered 003b, not 021: `004_expor
 - Provenance: `source_url` is the API call (without token) next to the provider and `collected_at`.
 - **NOT verified live**: `date_cloture_exercice` and `duree_exercice` come from the Pappers documentation, not from a real response. After `python -m fbdb.enrich.pappers --limit 5`, check in `company_financials` that `period_end` / `duration_months` are filled; if they are NULL the field names differ.
 
-### 6b. Google Places (spec section 11)
+### 6b. Google Places (spec section 10: reviews)
 Migration `sql/021_places_status.sql`. Found and fixed:
 - "No rating" had no reason. `company_reviews.status` is now `matched` (confidence >= 0.8, the only rows the export uses) / `to_verify` (a candidate exists, not proven, never exported) / `not_found` (search ran and returned nothing: NOT "no Google page") / `inaccessible` (call failed); no row = not searched. Old rows are backfilled from their confidence.
 - A failed call recorded nothing, so it looked like "not searched" and was retried at every run. It now writes `inaccessible` with `error_detail` and is asked again after `PLACES_RETRY_DAYS` (default 7). A rating already stored is never touched by a failed call. A billing / key error (`QuotaExhausted`) is not recorded against the establishment.
@@ -195,7 +195,7 @@ Migration `sql/021_places_status.sql`. Found and fixed:
 - **Town centre taken for the address**: a match that only found the town (`result_type = municipality`, score can still be 0.8+) was stored as `verified`. It is now flagged (`MUNICIPALITY_ONLY` in `data_quality_issues`), no coordinates are stored, and `geocode_precision` keeps what the service answered (housenumber / street / locality / municipality). When the service does not return `result_type` the old rule (score >= 0.6) applies.
 - **NOT verified live**: `result_type` is requested as a result column from the BAN CSV documentation; check on the first run that `geocode_precision` is filled. The 0.6 score threshold is not measured: after the first run, look at ~50 rows around 0.6-0.8 by hand (`standardized_address` against the SIRENE address).
 
-### 6d. Certifications and insurance (spec section 10: RGE, Qualibat, Qualifelec, RC pro)
+### 6d. Certifications and insurance (spec section 11: RGE, Qualibat, Qualifelec, RC pro)
 Migration `sql/022_certification_status.sql`. There was no PostgreSQL test for the licensed-file loader at all; there is now. Found and fixed:
 - **No trace of which file a row came from**: the contract reference was only in a batch note. New table `certification_loads` (provider, contract, file, coverage note, types the file carried, counts) for both `fbdb.enrich.certifications` and `fbdb.enrich.ademe_rge`; each new row has `load_id`. Rows loaded earlier get a `backfill` load (file and date unknown, said so). New CLI options `--provider` and `--coverage-note`.
 - **A changed end date was dropped silently**: a known certificate re-read with another `valid_to` was just "already known". The first value is kept and the other goes to `field_conflicts` (`certification:<type>:<label>:<valid_from>:valid_to`); no duplicate conflict on re-runs.

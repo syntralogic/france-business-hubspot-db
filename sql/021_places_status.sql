@@ -1,4 +1,4 @@
--- Search status per establishment for Google Places (spec section 11): the row already says "found"; it must also say
+-- Search status per establishment for Google Places (spec section 10): the row already says "found"; it must also say
 -- WHY there is no rating. Idempotent.
 --   matched       candidate accepted (confidence >= 0.8): the only rows the export may use
 --   to_verify     a candidate exists but name / distance do not prove it is this establishment: kept, never exported
