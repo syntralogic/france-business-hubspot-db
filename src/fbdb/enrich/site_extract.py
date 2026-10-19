@@ -154,21 +154,84 @@ _STOP = {_fold(w) for w in (
     "Artisan", "Électricien", "Electricien", "Plombier", "Maçon", "Menuisier", "Chauffagiste")}
 
 
+# A FIRST name is never a place word, a trade / service noun, a brand or a company word: "Saint Etienne", "Chauffage Climatisation",
+# "Daikin Premium", "Les Pins" are headings, towns or products, not people. (Found by stress-testing with typical page texts.)
+_NOT_FIRST = {_fold(w) for w in (
+    "Saint", "Sainte", "Les", "Le", "La", "L", "Mont", "Port", "Pont", "Bois", "Val", "Villeneuve", "Chateau", "Château", "Aix", "Bourg",
+    "Ville", "Pays", "Region", "Région", "Departement", "Département", "Mairie", "Centre", "Zone", "Parc", "Residence", "Résidence",
+    "Chauffage", "Climatisation", "Plomberie", "Electricite", "Électricité", "Installation", "Depannage", "Dépannage", "Renovation",
+    "Rénovation", "Entretien", "Maintenance", "Construction", "Batiment", "Bâtiment", "Maison", "Salle", "Pompe", "Panneau", "Panneaux",
+    "Solaire", "Energie", "Énergie", "Confort", "Expert", "Pro", "Premium", "Groupe", "Group", "Atelier", "Agence", "Cabinet", "Bureau",
+    "Espace", "Air", "Eau", "Isolation", "Ventilation", "Toiture", "Couverture", "Peinture", "Carrelage", "Serrurerie", "Menuiserie",
+    "Domotique", "Securite", "Sécurité", "Qualite", "Qualité", "Garantie", "Tarifs", "Realisations", "Réalisations", "Prestations",
+    "Partenaires", "Temoignages", "Témoignages", "Avis", "Actualites", "Actualités", "Blog", "Galerie", "Zones", "Intervention",
+    "Votre", "Vos", "Ma", "Mon", "Mes", "Ce", "Cette", "Ces", "Une", "Un", "Des", "Du", "De", "Et", "En", "Pour", "Avec", "Sans")}
+# a LAST name is never one of these non-surname nouns (real surnames such as Charpentier, Boulanger, Fournier stay allowed)
+_NOT_LAST = {_fold(w) for w in (
+    "Climatisation", "Chauffage", "Plomberie", "Electricite", "Électricité", "Installation", "Depannage", "Dépannage", "Renovation",
+    "Rénovation", "Entretien", "Maintenance", "Premium", "Pro", "Expert", "Energie", "Énergie", "Confort", "Eau", "Air", "Provence",
+    "Qualite", "Qualité", "Garantie", "Securite", "Sécurité", "Domotique", "Solaire", "Services", "Groupe", "Group", "Isolation",
+    "Ventilation", "Toiture", "Couverture", "Peinture", "Carrelage", "Serrurerie", "Menuiserie", "Habitat", "Immobilier", "Fenetres",
+    "Fenêtres", "Portes", "Volets", "Tarifs", "Avis", "Realisations", "Réalisations", "Partenaires", "Prestations")}
+
+
+def _brand_tokens() -> set[str]:
+    from fbdb.enrich.activity_rules import BRANDS   # manufacturers named on sites: never a first name
+    return {_fold(label.split()[0]) for _code, label, _rx in BRANDS}
+
+
+_NOT_FIRST |= _brand_tokens()
+# civility written before a name ("Mme Claire Petit"): removed so that it does not swallow the first name
+_CIVILITY = re.compile(rf"(?<![\w-])(?:M\.|Mr\.?|Mme\.?|Mlle\.?|Monsieur|Madame|Mademoiselle|Dr\.?|Docteur|Ma[iî]tre)\s+(?=[{_UP}])")
+# a line that credits somebody who is NOT the company's own team: web agency / hosting credits, an article or photo author, a
+# testimonial (a customer who is "gérant" elsewhere), a partner / supplier / client. Never read for name + function.
+_NOT_OWN_TEAM = re.compile(
+    r"(?i)h[ée]berg|r[ée]alis[ée]e? par|cr[ée][ée]e? par|d[ée]velopp[ée]e? par|conception|webmaster|agence web|web ?design|©|copyright|"
+    r"[ée]crit(?:e)? par|r[ée]dig[ée]e? par|\bauteur|photographe|cr[ée]dits?\b|t[ée]moign|avis (?:client|google)|\bclients?\b|"
+    r"partenaires?|fournisseurs?|sous-?traitan|[«»\u201c\u201d]|ils nous (?:font|ont fait) confiance")
+_TRAILING_WORDS = {"chez", "de", "du", "des", "la", "le", "les", "a", "au", "aux", "et", "ou", "d", "l", "en", "pour", "par", "sur"}
+
+
 def _clean_name(first: str, last: str):
     if _fold(first) in _STOP or _fold(last) in _STOP or len(last) < 2:
+        return None
+    if _fold(first) in _NOT_FIRST or _fold(last) in _NOT_LAST:
         return None
     if last.isupper():
         last = "-".join(p.capitalize() for p in last.split("-"))
     return first, last
 
 
-def _tidy_function(text: str) -> str:
-    return re.sub(r"\s+", " ", text).strip(" -–—:;,.")
+def _tidy_function(text: str, first: str = "", last: str = "") -> str:
+    """The function as written, without the person's own name that the pattern may have swallowed, and without a trailing preposition."""
+    t = re.sub(r"\s+", " ", text).strip(" -–—:;,.")
+    for n in (first, last):
+        if n:
+            t = re.sub(rf"(?<![\w-]){re.escape(n)}(?![\w])", " ", t, flags=re.I)
+    words = t.split()
+    while words and _fold(words[-1].rstrip("'’")) in _TRAILING_WORDS:
+        words.pop()
+    return " ".join(words).strip(" -–—:;,.")
+
+
+def _names_in(text: str) -> list[tuple[str, str]]:
+    """Every (first, last) of the text that survives _clean_name. A rejected pair (\"Directeur Marc\") does not swallow the next word:
+    scanning restarts on its second word, so \"Directeur Marc Leroy\" still gives Marc Leroy and a second name is never missed."""
+    out, pos = [], 0
+    while True:
+        m = NAME_RE.search(text, pos)
+        if not m:
+            return out
+        if _clean_name(m.group(1), m.group(2)):
+            out.append((m.group(1), m.group(2)))
+            pos = m.end()
+        else:
+            pos = m.start(2)
 
 
 def _neighbour_ok(line: str) -> bool:
     """A neighbouring line may give a contact to the person only if it names nobody else and is not a switchboard/general line."""
-    if any(_clean_name(m.group(1), m.group(2)) for m in NAME_RE.finditer(line)):
+    if _names_in(line):
         return False
     return _use_from_context(line) not in ("switchboard", "general", "sales", "accounting", "recruitment", "after_sales")
 
@@ -176,6 +239,7 @@ def _neighbour_ok(line: str) -> bool:
 def extract_people(markdown: str) -> list[dict]:
     """Named people with their function, from the legal notice formulas and from name+function on the same/adjacent lines."""
     lines = [ln.strip() for ln in (markdown or "").splitlines()]
+    plain = [_CIVILITY.sub("", ln) for ln in lines]            # names are searched without their civility ("Mme Claire Petit")
     people: dict[tuple[str, str], dict] = {}
 
     def add(first, last, function, line, rule, block):
@@ -186,7 +250,7 @@ def extract_people(markdown: str) -> list[dict]:
         p = people.setdefault(key, {"first_name": cleaned[0], "last_name": cleaned[1], "function": None, "line": line[:240],
                                      "phones": [], "emails": [], "rule": rule})
         if function and not p["function"]:
-            p["function"] = _tidy_function(function)
+            p["function"] = _tidy_function(function, cleaned[0], cleaned[1])
             p["line"], p["rule"] = line[:240], rule
         for ph in extract_phones(block):
             if ph["normalized"] not in p["phones"]:
@@ -200,18 +264,19 @@ def extract_people(markdown: str) -> list[dict]:
             continue
         # contacts belong to the person they FOLLOW: own line + the next line (never the previous one, which is the person above)
         nxt = lines[i + 1] if i + 1 < len(lines) else ""
-        block = "\n".join([line] + ([nxt] if nxt and _neighbour_ok(nxt) else []))
+        block = "\n".join([line] + ([nxt] if nxt and _neighbour_ok(plain[i + 1]) else []))
         for m in LEGAL_NOTICE_RE.finditer(line):
             add(m.group(2), m.group(3), m.group(1), line, "legal_notice", line)
-        fm = FUNCTION_RE.search(line)
-        if not fm:
+        fm = FUNCTION_RE.search(plain[i])
+        if not fm or _NOT_OWN_TEAM.search(line):               # credits, authors, testimonials, partners: not the company's own team
             continue
-        # candidate names: same line first, else the previous / next non-empty line
-        for source in ([line] + [ln for ln in (lines[i - 1] if i else "", lines[i + 1] if i + 1 < len(lines) else "") if ln]):
-            names = [(m.group(1), m.group(2)) for m in NAME_RE.finditer(source) if _clean_name(m.group(1), m.group(2))]
+        # candidate names: same line first, else the previous / next non-empty line (never one that credits somebody else)
+        around = [(plain[j], lines[j]) for j in (i - 1, i + 1) if 0 <= j < len(lines) and lines[j] and not _NOT_OWN_TEAM.search(lines[j])]
+        for source, original in [(plain[i], line)] + around:
+            names = _names_in(source)
             if len(names) == 1:
                 # contacts count for the person only if the block holds exactly one person
-                add(names[0][0], names[0][1], fm.group(1), line if source is line else source + " / " + line, "name_and_function", block)
+                add(names[0][0], names[0][1], fm.group(1), line if source is plain[i] else original + " / " + line, "name_and_function", block)
                 break
             if len(names) > 1:
                 break

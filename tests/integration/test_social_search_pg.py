@@ -213,3 +213,16 @@ def test_migration_016_is_idempotent(db):
         conn.execute(sql)
         conn.execute(sql)
     assert q("SELECT count(*) FROM data_sources WHERE code='social_search'")[0][0] == 1
+
+
+def test_a_linkedin_profile_without_proof_never_attaches_to_the_director(db):
+    """Name and company name in the title are NOT a proof (homonyms): the profile stays a candidate and the person keeps no profile_url."""
+    c = Fake({"linkedin.com/in": [hit("https://fr.linkedin.com/in/eva-durand", "Eva Durand - Gerante - Alpha Elec", "Lyon, France. 500+ relations")]})
+    ss.run(DSN, client=c, limit=10, networks=("linkedin_director",))
+    assert q("SELECT s.status, s.candidate_url, s.evidence_type FROM social_searches s") == [("to_verify", LI_A, None)]
+    assert q("SELECT profile_url, match_proof FROM company_interlocutors") == [(None, None)]
+    # a different person with the same words (another Eva Durand, other company) is proven by nothing either
+    assert q("SELECT count(*) FROM company_contacts WHERE contact_type IN ('social','linkedin')")[0][0] == 0
+    # a later proven hit does attach it (the candidate is replaced by the proven profile, never the other way round)
+    ss.run(DSN, client=standard_client(), limit=10, networks=("linkedin_director",), refresh_days=0)
+    assert q("SELECT profile_url FROM company_interlocutors") == [(LI_A,)]

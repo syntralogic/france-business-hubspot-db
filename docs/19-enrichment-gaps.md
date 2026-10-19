@@ -60,7 +60,26 @@ python -m fbdb.enrich.interlocutors list --siren 552100554
 - Phones and emails go to `company_contacts` (`value_status = sourced`, source `website`, `match_url` = the page, `match_proof` = the line + the SIREN proof, `contact_use` guessed from the label or address: switchboard / direction / sales / emergency / after_sales / accounting / recruitment / general). A number on a page without a name stays "company - person not identified" (never the director's mobile by default). Existing values are never modified.
 - People: legal-notice formulas ("Directeur de la publication : ...") and a name next to a function keyword. The same person already known (register director) is reused, not duplicated. A phone/email is linked to a person (`published_with_name`) only when it sits on the person's line or on the line right after it.
 - Email verification (`email_verify`) and line type (`phone_lookup`) pick the new values up automatically.
-- The name heuristic is NOT validated on real sites: run `python -m fbdb.enrich.website --limit 5`, read the people found, and label ~50 sites by hand to measure precision before using `function_category` for targeting.
+- The name heuristic is **NOT validated on real sites** (no real site is reachable from the build sandbox: no precision figure exists yet, and none is claimed). Measure it with the tool below before using `function_category` or the person-to-contact links for targeting.
+
+### People quality (spec section 5, step 4)
+**Measuring (file based, free, repeatable)**
+```
+python -m fbdb.enrich.website --limit 50 --save-pages data/pages     # paid run; also writes the pages of each PROVEN site: data/pages/<siren>__NN.md
+python -m fbdb.report.people_eval sample data/pages --out to_label.csv --sites 50
+#   a person fills person / function_ok / category_ok / contacts_ok (yes|no|na); rows added by hand with extra=missed feed recall
+python -m fbdb.report.people_eval score to_label.csv --out reports/people_eval.json
+```
+`sample` lists every person the extractor returns on ~50 random sites (rule, line, function, predicted category, attached phone / email, page URL) and says how many sites returned nobody. `score` gives person precision overall and per rule (`legal_notice` vs `name_and_function`), function / category / contact-attachment precision and an indicative recall. Because the pages are saved, every rule change can be re-scored on the SAME pages without paying for a scrape again. **No acceptance threshold is invented**: the client decides it per use (attaching a phone to a person needs far more precision than a list of names). `--save-pages` writes only proven sites.
+
+**Rules improved (found by stress-testing typical page texts; each has a regression test, none measured on real sites)**
+- A first name is never a place word (`Saint`, `Les`, `Aix`...), a trade / service noun (`Chauffage`, `Climatisation`, `Dépannage`...), a company word (`Premium`, `Groupe`...) or a manufacturer (the brands of `activity_rules`); a last name is never a non-surname noun (`Climatisation`, `Eau`, `Provence`, `Premium`...). Real surnames that are also nouns (`Charpentier`, `Boulanger`) stay allowed. This removes headings such as "Chauffage Climatisation", towns ("Saint Etienne") and products ("Daikin Premium", "Air Eau") that were returned as people.
+- A line that credits someone who is not the company's own team is never read for name + function: hosting / web-agency / copyright credits, "écrit par" article authors, testimonials (quotes, "client", "avis"), partners, suppliers, sub-contractors. The legal-notice formula ("Directeur de la publication : ...") is still read.
+- A civility ("Mme", "M.", "Dr") no longer swallows the first name ("Mme Claire Petit" is found). A rejected pair ("Directeur Marc") no longer hides the name that follows ("Directeur Marc Leroy" gives Marc Leroy, and a line with two names stays ambiguous: nobody).
+- The stored function no longer contains the person's own name nor a trailing "chez / de / du".
+- Known limits (to read in the sample): a function line between two names is attached to the name ABOVE it (the usual team-grid layout); two people on one line are skipped; the vocabulary is for French building trades; a name that looks like a person but is a product name is still possible.
+
+**LinkedIn profile of a director** (`social_search`, network `linkedin_director`): attached to the person (`company_interlocutors.profile_url`) ONLY with a proof (SIREN on the page / snippet, link to the proven site, a phone or email we hold, address) AND both names on the page; otherwise the profile is a `to_verify` candidate in `social_searches` and the person keeps no `profile_url` (covered by a real-PostgreSQL test).
 
 ## HubSpot Contacts export (people)
 `python -m fbdb.export.hubspot_contacts --out data/exports` (also a step in `scripts/run_weekly.sh`, same `EXPORT_AFTER_WEEKLY` switch) writes `hubspot_contacts_<date>_partNN.csv` from the view `v_hubspot_contacts` (`sql/014`).

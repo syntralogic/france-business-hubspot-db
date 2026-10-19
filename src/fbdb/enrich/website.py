@@ -208,6 +208,7 @@ def check_site(client, siren: str, site_url: str, reserve=lambda: True) -> dict:
             elif url == site_url:
                 queue += legal_pages(site_url, page["links"])
     if res["proven"]:
+        res["texts"] = [(url, page["markdown"]) for url, page in scraped]      # for --save-pages (people precision sample)
         res["socials"] = social_links(links_all)
         for url, page in scraped:
             for key, fn in (("phones", site_extract.extract_phones), ("emails", site_extract.extract_emails)):
@@ -305,7 +306,17 @@ def store_extracted(cur, company_id: int, result: dict, source_id: int) -> dict:
     return stats
 
 
-def run(dsn: str, client=None, limit: int = 100, refresh_days: int = 90, cap: int = DAILY_CAP) -> dict:
+def save_pages(directory: str, siren: str, texts: list[tuple[str, str]]) -> int:
+    """Write the pages read on a PROVEN site as `<siren>__NN.md` (first line: `<!-- source: URL -->`) so that people / contact extraction can
+    be measured and re-run offline (fbdb.report.people_eval) without paying for the scrape again. Returns the number of files written."""
+    os.makedirs(directory, exist_ok=True)
+    for i, (url, markdown) in enumerate(texts, 1):
+        with open(os.path.join(directory, f"{siren}__{i:02d}.md"), "w", encoding="utf-8") as fh:
+            fh.write(f"<!-- source: {url} -->\n{markdown}")
+    return len(texts)
+
+
+def run(dsn: str, client=None, limit: int = 100, refresh_days: int = 90, cap: int = DAILY_CAP, save_pages_dir: Optional[str] = None) -> dict:
     client = client or FirecrawlClient()
     stats = {"read": 0, "proven": 0, "not_proven": 0, "socials_added": 0, "phones_added": 0, "emails_added": 0, "people_added": 0,
              "person_links": 0, "errors": 0, "cap_reached": False, "stopped_no_credits": False}
@@ -331,6 +342,8 @@ def run(dsn: str, client=None, limit: int = 100, refresh_days: int = 90, cap: in
                 ex = store_extracted(cur, company_id, res, source_id)
                 stats["phones_added"] += ex["phones"]; stats["emails_added"] += ex["emails"]
                 stats["people_added"] += ex["people"]; stats["person_links"] += ex["person_links"]
+            if save_pages_dir and res["proven"]:
+                save_pages(save_pages_dir, siren, res.get("texts") or [])
             stats["proven" if res["proven"] else "not_proven"] += 1
             conn.commit()
     return stats
@@ -340,9 +353,10 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=100)
     ap.add_argument("--refresh-days", type=int, default=90)
+    ap.add_argument("--save-pages", metavar="DIR", help="also write the pages read on proven sites to DIR (for fbdb.report.people_eval)")
     a = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    s = run(os.environ["DATABASE_URL"], limit=a.limit, refresh_days=a.refresh_days)
+    s = run(os.environ["DATABASE_URL"], limit=a.limit, refresh_days=a.refresh_days, save_pages_dir=a.save_pages)
     print(s)
     if s["stopped_no_credits"] or s["errors"]:
         raise SystemExit(1)

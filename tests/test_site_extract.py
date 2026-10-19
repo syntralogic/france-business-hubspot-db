@@ -69,3 +69,47 @@ def test_contact_line_belongs_to_the_person_above_not_the_next_one():
     text = "Luc MARTIN\nGérant\nDirect : 06 98 76 54 32\nEva Durand, Responsable commercial\nSAV : 06 11 22 33 44"
     p = {a["last_name"]: a for a in x.extract_people(text)}
     assert p["Martin"]["phones"] == ["+33698765432"] and p["Durand"]["phones"] == []
+
+
+# ---------------------------------------------------------------- people: false-positive classes found by stress-testing typical page texts
+def _who(text):
+    return [(p["first_name"], p["last_name"], p["function"]) for p in x.extract_people(text)]
+
+
+def test_headings_products_towns_and_brands_are_not_people():
+    assert _who("Chauffage Climatisation\nResponsable Installation Dépannage\nContact") == []
+    assert _who("Directeur régional Saint Etienne") == [] and _who("Responsable Aix Provence\nSaint Denis Directeur") == []
+    assert _who("Gérant de la SCI Les Pins") == []
+    assert _who("Pompe à chaleur Air Eau Responsable Garantie") == []
+    assert _who("Atlantic Climatisation Responsable Qualité") == []
+
+
+def test_real_surnames_that_are_also_nouns_stay_allowed():
+    assert _who("Paul Charpentier - Chef de chantier") == [("Paul", "Charpentier", "Chef de chantier")]
+    assert _who("Luc Boulanger, gérant") == [("Luc", "Boulanger", "gérant")]
+
+
+def test_credits_authors_testimonials_and_partners_are_not_the_companys_team():
+    assert _who("Hébergeur : OVH SAS, directeur Octave Klaba") == []
+    assert _who("Article écrit par Julien Moreau, responsable communication") == []
+    assert _who("« Très bon travail » Paul Durand, gérant de la boulangerie Dupont") == []
+    assert _who("Notre partenaire Daikin, Directeur Marc Leroy chez Daikin France") == []
+    assert _who("« Super » dit Léa Martin\nGérant\n") == []              # a testimonial line next to a function is not its owner
+    # the legal notice formula stays read even when a credit follows on the same line
+    assert _who("Directeur de la publication : Jean Dupont - Conception : agence Web") == [("Jean", "Dupont", "Directeur de la publication")]
+
+
+def test_civility_does_not_swallow_the_first_name():
+    assert _who("Mme Claire Petit, assistante de direction") == [("Claire", "Petit", "assistante de direction")]
+    assert _who("Directeur : M. Pierre Lambert") == [("Pierre", "Lambert", "Directeur")]
+
+
+def test_a_rejected_pair_does_not_hide_the_name_that_follows_it():
+    assert _who("Directeur Marc Leroy") == [("Marc", "Leroy", "Directeur")]
+    assert _who("Notre Gérant Jean Dupont") == [("Jean", "Dupont", "Gérant")]
+    assert _who("Directeur Marc Leroy chez Dupont Elec") == []         # two names on the line: ambiguous, nobody
+
+
+def test_function_text_never_contains_the_persons_own_name_or_a_trailing_preposition():
+    assert x._tidy_function("Directeur Marc Leroy chez", "Marc", "Leroy") == "Directeur"
+    assert x._tidy_function("Responsable commercial de", "", "") == "Responsable commercial"

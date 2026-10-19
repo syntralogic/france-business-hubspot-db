@@ -75,3 +75,21 @@ def test_unproven_site_stores_nothing(db):
     with psycopg.connect(DSN) as conn:
         assert conn.execute("SELECT count(*) FROM company_contacts WHERE contact_type IN ('phone','email')").fetchone()[0] == 0
         assert conn.execute("SELECT count(*) FROM company_interlocutors").fetchone()[0] == 0
+
+
+def test_save_pages_keeps_the_pages_of_a_proven_site_only(db, tmp_path):
+    client = Fake({"https://alpha-elec.fr": HOME, "https://alpha-elec.fr/mentions-legales": LEGAL, "https://alpha-elec.fr/contact": CONTACT})
+    w.run(DSN, client=client, limit=10, save_pages_dir=str(tmp_path / "pages"))
+    files = sorted(p.name for p in (tmp_path / "pages").iterdir())
+    assert files == [f"{SIREN}__01.md", f"{SIREN}__02.md", f"{SIREN}__03.md"]
+    first = (tmp_path / "pages" / files[0]).read_text(encoding="utf-8")
+    assert first.startswith("<!-- source: https://alpha-elec.fr -->\nAlpha Elec")
+    from fbdb.report import people_eval
+    rows, _ = people_eval.rows_for(people_eval.read_pages(str(tmp_path / "pages")), [SIREN])
+    assert {(r["first_name"], r["last_name"]) for r in rows} == {("Luc", "Martin"), ("Eva", "Durand")}      # re-run offline on the saved pages
+
+
+def test_save_pages_writes_nothing_for_an_unproven_site(db, tmp_path):
+    client = Fake({"https://alpha-elec.fr": {"markdown": "Tel 04 72 00 00 00 Luc MARTIN Gérant", "links": []}})
+    w.run(DSN, client=client, limit=10, save_pages_dir=str(tmp_path / "pages"))
+    assert not (tmp_path / "pages").exists()
