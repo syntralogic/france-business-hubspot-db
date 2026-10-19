@@ -19,7 +19,8 @@ Guards
 
 Usage: python -m fbdb.enrich.licensed_contacts FILE.csv --contract-ref ABC-2026-01 [--mapping map.json] [--status sourced]
 Mapping JSON (all optional): {"siret": "SIRET", "siren": "SIREN", "phones": ["Tel", "Mobile"], "emails": ["Mail"],
-"website": "Site web", "linkedin": "LinkedIn"}. Needs DATABASE_URL.
+"website": "Site web", "linkedin": "LinkedIn",
+"email_uses": {"Mail devis": "sales", "Mail direction": "direction"}} (email_uses: the function the provider declares for an email column). Needs DATABASE_URL.
 """
 from __future__ import annotations
 
@@ -35,6 +36,7 @@ from typing import Optional
 import psycopg
 
 from fbdb.common.provenance import record_conflict
+from fbdb.enrich.email_priority import USES
 from fbdb.enrich.site_extract import email_use
 from fbdb.match.resolve import contact_conflict
 from fbdb.transform.normalize import (
@@ -113,6 +115,28 @@ def parse_row(row: dict, mapping: dict) -> tuple[Optional[str], Optional[str], l
     return (siret or None), (siren or None), uniq, issues
 
 
+def provider_uses(row: dict, mapping: dict) -> tuple[dict[str, str], list[tuple[str, str]]]:
+    """Function of each email as the PROVIDER's column declares it: mapping {"email_uses": {"Mail devis": "sales", ...}}.
+
+    Only columns that are also listed in mapping["emails"]. Returns ({normalized email: use}, [(issue_code, detail)]); a use that is not
+    one of fbdb.enrich.email_priority.USES is reported (INVALID_EMAIL_USE) and ignored, never guessed. Pure function.
+    """
+    uses: dict[str, str] = {}
+    issues: list[tuple[str, str]] = []
+    declared = mapping.get("email_uses") or {}
+    for col in mapping.get("emails") or []:
+        if col not in declared:
+            continue
+        use = str(declared[col]).strip().lower()
+        if use not in USES:
+            issues.append(("INVALID_EMAIL_USE", f"{col} -> {declared[col]}"))
+            continue
+        norm = normalize_email(_cell(row, col))
+        if norm:
+            uses[norm] = use
+    return uses, issues
+
+
 def _read_rows(path: Path):
     with path.open(newline="", encoding="utf-8-sig") as fh:
         sample = fh.read(8192)
@@ -139,7 +163,7 @@ def _match(cur, siret: Optional[str], siren: Optional[str]):
     return None
 
 
-def store_contact(cur, company_id, establishment_id, ctype, raw, norm, status, source_id, batch_id) -> str:
+def store_contact(cur, company_id, establishment_id, ctype, raw, norm, status, source_id, batch_id, provider_use=None) -> str:
     """Insert or refresh one contact. Returns 'added' or 'unchanged'."""
     cur.execute(
         "SELECT contact_id FROM company_contacts WHERE company_id = %s AND contact_type = %s AND value_normalized = %s",
@@ -147,6 +171,9 @@ def store_contact(cur, company_id, establishment_id, ctype, raw, norm, status, s
     existing = cur.fetchone()
     if existing:
         cur.execute("UPDATE company_contacts SET last_verified_at = now() WHERE contact_id = %s", (existing[0],))
+        if provider_use:   # the provider's declaration replaces a guess from the address, never a person's choice or a page reading
+            cur.execute("UPDATE company_contacts SET contact_use = %s, contact_use_basis = 'provider_file' "
+                        "WHERE contact_id = %s AND (contact_use_basis IS NULL OR contact_use_basis = 'address_name')", (provider_use, existing[0]))
         return "unchanged"
     cur.execute(
         "SELECT 1 FROM company_contacts WHERE company_id = %s AND contact_type = %s "
@@ -163,11 +190,12 @@ def store_contact(cur, company_id, establishment_id, ctype, raw, norm, status, s
         if other:
             record_conflict(cur, company_id, "website", other[0], other[1], norm, source_id, establishment_id)
     # function of the mailbox, read from the address only (devis@, sav@ ...); None when the address does not say
-    use = email_use(norm) if ctype == "email" else None
+    use = provider_use or (email_use(norm) if ctype == "email" else None)
+    basis = "provider_file" if provider_use else ("address_name" if use else None)
     cur.execute(
         "INSERT INTO company_contacts (company_id, establishment_id, contact_type, value, value_normalized, is_primary, "
         "value_status, source_id, contact_use, contact_use_basis, last_verified_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, now())",
-        (company_id, establishment_id, ctype, raw, norm, not has_primary, status, source_id, use, "address_name" if use else None))
+        (company_id, establishment_id, ctype, raw, norm, not has_primary, status, source_id, use, basis))
     cur.execute(
         "INSERT INTO company_change_history (company_id, table_name, field_name, old_value, new_value, change_type, "
         "source_id, batch_id) VALUES (%s, 'company_contacts', %s, NULL, %s, 'insert', %s, %s)",
@@ -208,6 +236,8 @@ def run(dsn: str, path: Path, contract_ref: Optional[str], mapping: Optional[dic
             for n, (line, row) in enumerate(_read_rows(path), 1):
                 stats["read"] += 1
                 siret, siren, contacts, issues = parse_row(row, mapping)
+                uses, use_issues = provider_uses(row, mapping)
+                issues = issues + use_issues
                 for code, detail in issues:
                     reject(line, siret, siren, code, detail)
                 if not siret and not siren:
@@ -228,7 +258,8 @@ def run(dsn: str, path: Path, contract_ref: Optional[str], mapping: Optional[dic
                     continue
                 stats["matched"] += 1
                 for ctype, raw, norm in contacts:
-                    res = store_contact(cur, company_id, establishment_id, ctype, raw, norm, status, source_id, batch_id)
+                    res = store_contact(cur, company_id, establishment_id, ctype, raw, norm, status, source_id, batch_id,
+                                        provider_use=uses.get(norm) if ctype == "email" else None)
                     stats["contacts_added" if res == "added" else "contacts_unchanged"] += 1
                 if n % COMMIT_EVERY == 0:
                     conn.commit()

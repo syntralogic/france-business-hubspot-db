@@ -38,7 +38,10 @@ ALIASES = {
     "body": ["organisme", "nom_organisme"],
     "valid_from": ["date_debut", "date_debut_validite", "date_de_debut"],
     "valid_to": ["date_fin", "date_fin_validite", "date_de_fin"],
+    # link to the certificate / qualification page, when the file has one. NOT verified against the live file: check the header.
+    "url": ["url_qualification", "lien_certificat", "url_certificat", "lien_qualification"],
 }
+URL_OK = re.compile(r"^https?://\S+$", re.I)
 
 
 def _key(h: str) -> str:
@@ -74,7 +77,8 @@ def read_rows(path: str | Path) -> Iterator[dict]:
             if g("domain") and g("domain").lower() not in label.lower():
                 label = f"{label} ({g('domain')})" if label else g("domain")
             yield {"siret": siret if len(siret) == 14 else "", "raw_siret": g("siret"), "label": label or None,
-                   "valid_from": parse_date(g("valid_from")), "valid_to": parse_date(g("valid_to"))}
+                   "valid_from": parse_date(g("valid_from")), "valid_to": parse_date(g("valid_to")),
+                   "url": g("url") if URL_OK.match(g("url")) and len(g("url")) <= 2000 else None}
 
 
 def run(dsn: str, path: str, rejects_path: Optional[str] = None) -> dict:
@@ -86,15 +90,15 @@ def run(dsn: str, path: str, rejects_path: Optional[str] = None) -> dict:
         load_id = conn.execute(
             "INSERT INTO certification_loads (provider, cert_types, file_name, coverage_note) VALUES ('ademe_rge', ARRAY['RGE'], %s, %s) "
             "RETURNING load_id", (Path(path).name, "ADEME open list of RGE companies (Licence Ouverte)")).fetchone()[0]
-        conn.execute("CREATE TEMP TABLE tmp_rge (siret CHAR(14), label TEXT, valid_from DATE, valid_to DATE) ON COMMIT DROP")
-        with conn.cursor().copy("COPY tmp_rge (siret,label,valid_from,valid_to) FROM STDIN") as cp:
+        conn.execute("CREATE TEMP TABLE tmp_rge (siret CHAR(14), label TEXT, valid_from DATE, valid_to DATE, url TEXT) ON COMMIT DROP")
+        with conn.cursor().copy("COPY tmp_rge (siret,label,valid_from,valid_to,url) FROM STDIN") as cp:
             for r in rows:
                 if r["siret"]:
-                    cp.write_row((r["siret"], r["label"], r["valid_from"], r["valid_to"]))
+                    cp.write_row((r["siret"], r["label"], r["valid_from"], r["valid_to"], r["url"]))
         conn.execute("""DELETE FROM company_certifications WHERE source_id=%s AND cert_type='RGE'
                         AND establishment_id IN (SELECT a.establishment_id FROM company_addresses a JOIN tmp_rge t ON t.siret=a.siret)""", (src,))
-        cur = conn.execute("""INSERT INTO company_certifications(company_id, establishment_id, cert_type, cert_label, valid_from, valid_to, source_id, load_id)
-                              SELECT a.company_id, a.establishment_id, 'RGE', t.label, t.valid_from, t.valid_to, %s, %s
+        cur = conn.execute("""INSERT INTO company_certifications(company_id, establishment_id, cert_type, cert_label, valid_from, valid_to, source_id, load_id, certificate_url)
+                              SELECT a.company_id, a.establishment_id, 'RGE', t.label, t.valid_from, t.valid_to, %s, %s, t.url
                               FROM tmp_rge t JOIN company_addresses a ON a.siret = t.siret""", (src, load_id))
         stats["matched_rows"] = cur.rowcount
         stats["establishments"] = conn.execute(

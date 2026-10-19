@@ -5,6 +5,7 @@ What is stored, and what is NOT:
     accounting / recruitment / emergency / switchboard. `contact_use_basis` says HOW it was decided:
       address_name  read from the address itself (devis@, sav@, direction@ ...)       - free, deterministic
       page_context  read from the words around the value on the proven site          - set by fbdb.enrich.website
+      provider_file declared by a column of the licensed provider file (mapping email_uses) - set by fbdb.enrich.licensed_contacts
       manual        a person set it here (set-use)                                    - the only "certain" basis
     A mailbox whose function cannot be read keeps NULL ("unknown"): nothing is guessed from a person's name or from the domain.
     A named mailbox (jean.dupont@) is NOT assumed to be the director's.
