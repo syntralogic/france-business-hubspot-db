@@ -245,7 +245,7 @@ def search_network(client, network: str, query: str, facts: dict, reserve=lambda
 DUE_SQL = """
 WITH base AS NOT MATERIALIZED (
   SELECT c.company_id, c.siren, c.legal_name, c.trading_name, a.city, a.postal_code, a.street
-  FROM companies c JOIN company_addresses a ON a.company_id = c.company_id AND a.is_head_office AND a.status = 'active'
+  FROM companies c JOIN company_addresses a ON a.company_id = c.company_id AND a.is_head_office AND a.status = 'active' AND a.is_diffusible
   WHERE c.status = 'active' AND c.is_diffusible AND a.city IS NOT NULL
 ), tasks AS (
   SELECT b.company_id, n.network, NULL::bigint AS interlocutor_id

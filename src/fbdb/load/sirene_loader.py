@@ -93,6 +93,15 @@ WHERE (company_addresses.is_head_office, company_addresses.establishment_name, c
             THEN COALESCE(EXCLUDED.closure_date, company_addresses.closure_date) END);
 """
 
+# The upsert above skips establishments INSEE does not diffuse (its fields are masked). One that WAS diffusible and is not
+# any more must stop being exported / sent to providers: flag it (nothing is deleted); diffused again -> flag cleared and the
+# upsert refreshed its fields in the same run.
+SYNC_ESTABLISHMENT_DIFFUSION = """
+UPDATE company_addresses a SET is_diffusible = e.is_diffusible, updated_at = now()
+FROM stg_sirene_etab e
+WHERE a.siret = e.siret AND e.is_diffusible IS NOT NULL AND a.is_diffusible IS DISTINCT FROM e.is_diffusible;
+"""
+
 SET_WATERMARK = """
 INSERT INTO pipeline_state (key, value)
 SELECT 'sirene_last_processed', max(source_last_processed) FROM stg_sirene_etab
@@ -133,6 +142,7 @@ def load(ul_path: Path, etab_path: Path, only_active: bool, dsn: str) -> None:
                 n_et = _copy_rows(cur, "stg_sirene_etab", ETAB_STG_COLS, read_csv_rows(etab_path, map_etablissement, only_active))
                 cur.execute(UPSERT_COMPANIES)
                 cur.execute(UPSERT_ESTABLISHMENTS)
+                cur.execute(SYNC_ESTABLISHMENT_DIFFUSION)
                 cur.execute(UPDATE_ARTISAN_FLAG)
                 cur.execute(SET_WATERMARK)
                 cur.execute(

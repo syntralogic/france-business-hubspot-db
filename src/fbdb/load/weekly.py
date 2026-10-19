@@ -23,7 +23,7 @@ import psycopg
 from fbdb.extract.sirene_api import SireneApiClient
 from fbdb.extract.sirene_bulk import map_etablissement, map_unite_legale
 from fbdb.load.sirene_loader import (
-    ETAB_STG_COLS, UL_STG_COLS, UPDATE_ARTISAN_FLAG, UPSERT_COMPANIES, UPSERT_ESTABLISHMENTS, _copy_rows,
+    ETAB_STG_COLS, UL_STG_COLS, SYNC_ESTABLISHMENT_DIFFUSION, UPDATE_ARTISAN_FLAG, UPSERT_COMPANIES, UPSERT_ESTABLISHMENTS, _copy_rows,
 )
 
 log = logging.getLogger("fbdb.weekly")
@@ -191,6 +191,7 @@ def run(since: str | None, dsn: str, client=None) -> dict:
             cur.execute(HISTORY_ESTAB_CHANGES, p)
             cur.execute(UPSERT_COMPANIES)
             cur.execute(UPSERT_ESTABLISHMENTS)
+            cur.execute(SYNC_ESTABLISHMENT_DIFFUSION)
             cur.execute(UPDATE_ARTISAN_FLAG)
             cur.execute(OBSERVED_CLOSURE_ESTABS, p)
             cur.execute(OBSERVED_CLOSURE_COMPANIES, p)

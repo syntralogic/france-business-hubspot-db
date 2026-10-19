@@ -93,7 +93,7 @@ def geocode_csv(csv_text: str, client: Optional[httpx.Client] = None) -> str:
 
 SELECT_TODO = """
 SELECT establishment_id, company_id, street, postal_code, city FROM company_addresses
-WHERE geocoded_at IS NULL AND status = 'active' AND postal_code IS NOT NULL
+WHERE geocoded_at IS NULL AND status = 'active' AND is_diffusible AND postal_code IS NOT NULL
 ORDER BY establishment_id LIMIT %s
 """
 

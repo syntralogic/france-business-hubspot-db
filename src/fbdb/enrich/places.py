@@ -108,7 +108,7 @@ SELECT a.establishment_id, COALESCE(NULLIF(a.establishment_name,''), NULLIF(c.tr
 FROM company_addresses a
 JOIN companies c ON c.company_id = a.company_id
 LEFT JOIN company_reviews r ON r.establishment_id = a.establishment_id AND r.provider = 'google_places'
-WHERE a.status='active' AND c.is_diffusible AND a.address_status='verified'
+WHERE a.status='active' AND c.is_diffusible AND a.is_diffusible AND a.address_status='verified'
   AND a.latitude IS NOT NULL AND a.longitude IS NOT NULL
   AND COALESCE(NULLIF(a.establishment_name,''), NULLIF(c.trading_name,''), c.legal_name) IS NOT NULL
   AND (r.review_id IS NULL

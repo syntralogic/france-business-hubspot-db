@@ -126,7 +126,7 @@ def discover(client, siren: str, query: str, reserve=lambda: True, max_candidate
 SELECT_DUE = """
 SELECT c.company_id, c.siren, c.legal_name, c.trading_name, a.city
 FROM companies c
-JOIN company_addresses a ON a.company_id = c.company_id AND a.is_head_office AND a.status = 'active'
+JOIN company_addresses a ON a.company_id = c.company_id AND a.is_head_office AND a.status = 'active' AND a.is_diffusible
 LEFT JOIN website_searches s ON s.company_id = c.company_id
 WHERE c.status = 'active' AND c.is_diffusible AND a.city IS NOT NULL
   AND NOT EXISTS (SELECT 1 FROM company_contacts k WHERE k.company_id = c.company_id AND k.contact_type = 'website')

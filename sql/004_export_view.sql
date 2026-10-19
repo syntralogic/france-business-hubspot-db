@@ -87,4 +87,4 @@ LEFT JOIN LATERAL (
 LEFT JOIN LATERAL (
   SELECT r.rating, r.review_count, r.profile_url FROM company_reviews r
   WHERE r.establishment_id = a.establishment_id AND r.match_confidence >= 0.8 LIMIT 1) rv ON TRUE
-WHERE c.is_diffusible;
+WHERE c.is_diffusible AND a.is_diffusible;   -- company AND establishment must both be diffusible

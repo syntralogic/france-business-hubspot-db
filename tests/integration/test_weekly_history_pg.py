@@ -38,7 +38,7 @@ class Fake:
 def test_updated_establishment_is_not_logged_as_insert():
     with psycopg.connect(DSN, autocommit=True) as conn:
         conn.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
-        for f in ("000_reference_data.sql", "001_schema.sql", "002_staging.sql", "003_pipeline_state.sql", "003a_provenance.sql", "003b_financials_exercice.sql",
+        for f in ("000_reference_data.sql", "001_schema.sql", "002_staging.sql", "003_pipeline_state.sql", "003a_provenance.sql", "003b_financials_exercice.sql", "003c_address_diffusion.sql",
                   "004_export_view.sql", "006_closure_date.sql"):
             conn.execute((SQL_DIR / f).read_text(encoding="utf-8"))
         # state as left by the bulk loader: company + two establishments, NO history rows
