@@ -141,3 +141,20 @@ def test_003b_is_idempotent_on_a_database_that_already_has_rows(db):
         for _ in range(2):
             c.execute((SQL_DIR / "003b_financials_exercice.sql").read_text(encoding="utf-8"))
         assert c.execute("SELECT count(*) FROM company_financials").fetchone()[0] == 1
+
+
+def test_balance_sheet_figures_stored_null_kept_conflict_on_change(db):
+    first = Scripted({"552100554": _fin(capitaux_propres=40000, tresorerie=None), "732829320": None, "404833048": None})
+    pappers.run(DSN, first, limit=1)
+    with psycopg.connect(DSN) as c:
+        assert c.execute("SELECT equity_eur, cash_eur, debt_eur FROM company_financials").fetchall() == [(40000, None, None)]
+        c.execute("UPDATE companies SET financials_checked_at = NULL")
+        c.commit()
+    second = Scripted({"552100554": _fin(capitaux_propres=45000, tresorerie=1200, endettement=300), "732829320": None, "404833048": None})
+    st = pappers.run(DSN, second, limit=1)
+    assert st["conflicts"] == 1
+    with psycopg.connect(DSN) as c:
+        # first equity kept, the two figures we did not have are filled in
+        assert c.execute("SELECT equity_eur, cash_eur, debt_eur FROM company_financials").fetchall() == [(40000, 1200, 300)]
+        assert c.execute("SELECT field_name, kept_value, other_value FROM field_conflicts").fetchall() == [
+            ("financials:2023-12-31:equity_eur", "40000.00", "45000.00")]

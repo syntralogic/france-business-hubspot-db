@@ -1,7 +1,8 @@
 """Pappers financials (revenue, headcount) by SIREN. PAID: needs a Pappers API plan and key.
 
 API (Pappers v2): GET https://api.pappers.fr/v2/entreprise?api_token=KEY&siren=NNNNNNNNN, JSON with a `finances` list
-(annee, date_cloture_exercice, duree_exercice, chiffre_affaires, resultat, effectif). Pappers sells credits (subscription or pay-as-you-go) and the API stops
+(annee, date_cloture_exercice, duree_exercice, chiffre_affaires, resultat, effectif, and the balance-sheet figures capitaux_propres /
+tresorerie / endettement under tolerant aliases, see BALANCE_ALIASES: a figure Pappers does not publish stays NULL, never 0). Pappers sells credits (subscription or pay-as-you-go) and the API stops
 when they run out. NOT verified against a live key from the build sandbox (blocked): field names are tolerant, the credit
 cost per call is configurable (PAPPERS_CREDITS_PER_CALL, default 1: check the plan, some options cost more), and the
 first run must be `--limit 5` with the log read. Confirm in the contract that storing results in a CRM is allowed.
@@ -80,8 +81,24 @@ def _months(v) -> Optional[int]:
     return int(n) if n is not None and 1 <= n <= 36 and n == int(n) else None
 
 
+# Balance-sheet fields (spec section 4). Tolerant aliases, NOT verified against a live key: the first alias present wins.
+BALANCE_ALIASES = {
+    "equity": ("capitaux_propres", "fonds_propres"),
+    "cash": ("tresorerie", "disponibilites"),
+    "debt": ("endettement", "dettes_financieres"),
+}
+
+
+def _first_num(f: dict, names) -> Optional[float]:
+    for n in names:
+        v = _num(f.get(n))
+        if v is not None:
+            return v
+    return None
+
+
 def parse_finances(payload: dict, keep: int = 3) -> list[dict]:
-    """[{year, period_end, duration_months, revenue, net_result, employees}] newest first.
+    """[{year, period_end, duration_months, revenue, net_result, employees, equity, cash, debt}] newest first.
 
     One row per exercise; only rows with a revenue, a result or a headcount. The same (year, closing date) twice keeps the first."""
     rows, seen = [], set()
@@ -91,14 +108,15 @@ def parse_finances(payload: dict, keep: int = 3) -> list[dict]:
         except (TypeError, ValueError):
             continue
         rev, res, emp = _num(f.get("chiffre_affaires")), _num(f.get("resultat")), _num(f.get("effectif"))
-        if rev is None and res is None and emp is None:
+        bal = {k: _first_num(f, names) for k, names in BALANCE_ALIASES.items()}
+        if rev is None and res is None and emp is None and all(v is None for v in bal.values()):
             continue
         end = _date(f.get("date_cloture_exercice"))
         if (year, end) in seen:
             continue
         seen.add((year, end))
         rows.append({"year": year, "period_end": end, "duration_months": _months(f.get("duree_exercice")),
-                     "revenue": rev, "net_result": res, "employees": int(emp) if emp is not None else None})
+                     "revenue": rev, "net_result": res, "employees": int(emp) if emp is not None else None, **bal})
     rows.sort(key=lambda r: (r["period_end"] or date(r["year"], 12, 31)), reverse=True)
     return rows[:keep]
 
@@ -131,7 +149,8 @@ LIMIT %(limit)s
 """
 
 
-FIELDS = (("revenue", "revenue_eur"), ("net_result", "net_result_eur"), ("employees", "employees"))
+FIELDS = (("revenue", "revenue_eur"), ("net_result", "net_result_eur"), ("employees", "employees"),
+          ("equity", "equity_eur"), ("cash", "cash_eur"), ("debt", "debt_eur"))
 
 
 def store(conn, company_id: int, rows: list[dict], source_id: int, source_url: Optional[str] = None) -> dict:
@@ -140,20 +159,21 @@ def store(conn, company_id: int, rows: list[dict], source_id: int, source_url: O
     stored = conflicts = 0
     for r in rows:
         cur = conn.execute(
-            """SELECT financial_id, revenue_eur, net_result_eur, employees FROM company_financials
+            """SELECT financial_id, revenue_eur, net_result_eur, employees, equity_eur, cash_eur, debt_eur FROM company_financials
                WHERE company_id=%s AND source_id=%s AND fiscal_year=%s AND period_end IS NOT DISTINCT FROM %s""",
             (company_id, source_id, r["year"], r["period_end"])).fetchone()
         if cur is None:
             conn.execute(
                 """INSERT INTO company_financials (company_id, fiscal_year, period_end, duration_months, revenue_eur,
-                     net_result_eur, employees, source_id, source_url) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                     net_result_eur, employees, equity_eur, cash_eur, debt_eur, source_id, source_url)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (company_id, r["year"], r["period_end"], r["duration_months"], r["revenue"], r["net_result"],
-                 r["employees"], source_id, source_url))
+                 r["employees"], r.get("equity"), r.get("cash"), r.get("debt"), source_id, source_url))
             stored += 1
             continue
-        fid, have = cur[0], dict(zip(("revenue", "net_result", "employees"), cur[1:]))
+        fid, have = cur[0], dict(zip(("revenue", "net_result", "employees", "equity", "cash", "debt"), cur[1:]))
         for key, col in FIELDS:
-            new, old = r[key], have[key]
+            new, old = r.get(key), have[key]
             if new is None:
                 continue
             if old is None:

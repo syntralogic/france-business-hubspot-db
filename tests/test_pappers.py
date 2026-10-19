@@ -28,3 +28,19 @@ def test_parse_finances_keeps_exercise_dates_and_durations():
     assert [(x["year"], x["period_end"], x["duration_months"]) for x in r] == [
         (2023, date(2023, 12, 31), 6), (2023, date(2023, 6, 30), 18), (2022, None, None), (2021, None, None)]
     assert r[0]["revenue"] == 400 and r[2]["net_result"] == -50
+
+
+def test_parse_finances_balance_sheet_aliases_and_nothing_invented():
+    p = {"finances": [
+        {"annee": 2023, "chiffre_affaires": 100, "capitaux_propres": 40000, "tresorerie": "1500.5", "endettement": 0},
+        {"annee": 2022, "fonds_propres": -2000, "disponibilites": 30, "dettes_financieres": 900},   # alias names
+        {"annee": 2021, "tresorerie": 12},                                                        # a balance figure alone is kept
+        {"annee": 2020, "capitaux_propres": "n/a"},                                               # unreadable: dropped, not 0
+        {"annee": 2019, "chiffre_affaires": 5},
+    ]}
+    r = parse_finances(p, keep=10)
+    by = {x["year"]: x for x in r}
+    assert (by[2023]["equity"], by[2023]["cash"], by[2023]["debt"]) == (40000, 1500.5, 0)   # a published 0 stays 0
+    assert (by[2022]["equity"], by[2022]["cash"], by[2022]["debt"]) == (-2000, 30, 900)
+    assert by[2021]["cash"] == 12 and by[2021]["equity"] is None and by[2021]["debt"] is None   # missing = None, never 0
+    assert 2020 not in by and by[2019]["equity"] is None
