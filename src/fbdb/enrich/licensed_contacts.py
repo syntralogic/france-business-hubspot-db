@@ -35,6 +35,7 @@ from typing import Optional
 import psycopg
 
 from fbdb.common.provenance import record_conflict
+from fbdb.match.resolve import contact_conflict
 from fbdb.transform.normalize import (
     is_valid_siren, is_valid_siret, normalize_domain, normalize_email, normalize_phone_fr,
 )
@@ -150,6 +151,8 @@ def store_contact(cur, company_id, establishment_id, ctype, raw, norm, status, s
         "SELECT 1 FROM company_contacts WHERE company_id = %s AND contact_type = %s "
         "AND establishment_id IS NOT DISTINCT FROM %s AND is_primary", (company_id, ctype, establishment_id))
     has_primary = cur.fetchone() is not None
+    if ctype in ("phone", "email"):
+        contact_conflict(cur, company_id, ctype, norm, source_id, status, establishment_id)
     if ctype == "website":
         # a company has one official website: a different value from another source is kept for review, not dropped
         cur.execute(

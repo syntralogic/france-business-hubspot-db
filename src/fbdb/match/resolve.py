@@ -73,3 +73,28 @@ def persist_conflicts(conn, company_id: int, field_name: str, res: Resolution, e
                         alt.value, alt.source_id, establishment_id)
         n += 1
     return n
+
+
+def contact_conflict(cur, company_id: int, ctype: str, new_value: str, new_source_id, new_status: str = "sourced",
+                     establishment_id=None, now: Optional[datetime] = None) -> int:
+    """Keep a phone/email that disagrees with the primary one already held (another source) in field_conflicts.
+
+    Call it BEFORE inserting the new contact. Nothing is dropped or re-ranked: the new value is still stored as a contact and
+    the existing primary stays the exported one (`kept_value`); the row only tells a human that two sources disagree.
+    Not a conflict: same value, same source (a site listing two numbers), or no primary yet. Returns the rows recorded.
+    """
+    if ctype not in ("phone", "email"):
+        return 0
+    cur.execute(
+        """SELECT k.value_normalized, k.value_status, k.source_id, k.collected_at, coalesce(d.priority, 99)
+             FROM company_contacts k LEFT JOIN data_sources d ON d.source_id = k.source_id
+            WHERE k.company_id = %s AND k.contact_type = %s AND k.is_primary AND k.establishment_id IS NOT DISTINCT FROM %s
+              AND k.value_normalized <> %s AND k.source_id IS DISTINCT FROM %s LIMIT 1""",
+        (company_id, ctype, establishment_id, new_value, new_source_id))
+    row = cur.fetchone()
+    if row is None:
+        return 0
+    when = now or datetime.now().astimezone()
+    kept = Candidate(row[0], row[4], row[3], 0.5, row[1], row[2])
+    other = Candidate(new_value, 99, when, 0.5, new_status, new_source_id)
+    return persist_conflicts(cur, company_id, ctype, Resolution(kept.value, kept, True, False, [other]), establishment_id)

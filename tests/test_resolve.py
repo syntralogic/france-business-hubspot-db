@@ -79,3 +79,26 @@ def test_persist_conflicts_noop_without_alternatives():
     conn = _FakeConn()
     assert persist_conflicts(conn, 1, "name", res) == 0
     assert conn.calls == []
+
+
+class _FakeCur:
+    def __init__(self, row):
+        self.row, self.calls = row, []
+
+    def execute(self, sql, params=()):
+        self.calls.append((sql, params))
+
+    def fetchone(self):
+        return self.row
+
+
+def test_contact_conflict_unit_only_phone_email_and_needs_a_primary():
+    from fbdb.match.resolve import contact_conflict
+    assert contact_conflict(_FakeCur(None), 1, "website", "x", 2) == 0
+    cur = _FakeCur(None)                      # no primary from another source
+    assert contact_conflict(cur, 1, "phone", "+33123456789", 2) == 0
+    assert len(cur.calls) == 1                # only the lookup, nothing written
+    cur = _FakeCur(("+33111111111", "sourced", 5, datetime(2026, 1, 1).astimezone(), 3))
+    assert contact_conflict(cur, 1, "email", "a@b.fr", 2) == 1
+    params = cur.calls[-1][1]
+    assert (params[2], params[3], params[5]) == ("email", "+33111111111", "a@b.fr")   # kept = existing primary, other = new value

@@ -31,6 +31,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 from fbdb.common import usage
 from fbdb.enrich import site_extract
 from fbdb.enrich.interlocutors import attach_person, link_contact
+from fbdb.match.resolve import contact_conflict
 from fbdb.transform.normalize import is_valid_siren, is_valid_siret
 
 log = logging.getLogger("fbdb.website")
@@ -273,6 +274,7 @@ def _put_contact(cur, company_id: int, ctype: str, item: dict, source_id: int, s
     cur.execute("SELECT 1 FROM company_contacts WHERE company_id = %s AND contact_type = %s AND establishment_id IS NULL AND is_primary",
                 (company_id, ctype))
     has_primary = cur.fetchone() is not None
+    contact_conflict(cur, company_id, ctype, item["normalized"], source_id)
     proof = f"{ctype} written on {item['url']}: {item['context'][:120]} | {site_proof}"
     cur.execute(
         """INSERT INTO company_contacts (company_id, contact_type, value, value_normalized, is_primary, value_status, source_id,
