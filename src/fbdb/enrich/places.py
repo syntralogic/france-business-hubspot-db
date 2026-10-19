@@ -15,6 +15,9 @@ PLACES_DAILY_CAP (default 100), atomic via fbdb.common.usage.
 MATCHING: up to 3 candidates; confidence = 0.6 * name similarity + 0.4 * distance score (1.0 within 100 m, 0 at 500 m or more).
 The best candidate is stored with its confidence and place id; the export only uses rows with confidence >= 0.8. No candidate
 -> a row with no place id and confidence 0, so the establishment is not asked again before the refresh date.
+STATUS (company_reviews.status, sql/021): matched / to_verify (candidate below 0.8, kept, never exported) / not_found (search ran,
+no candidate: NOT "no Google page") / inaccessible (the call failed: retried after PLACES_RETRY_DAYS, default 7; a rating already
+stored is kept untouched). No row = not searched. A failed call never erases a stored result.
 
 TERMS: Google gives no caching exception for rating / review count (only place_id). The HubSpot export therefore leaves
 ratings out unless the client's licence allows it (--allow-google-ratings, see export/hubspot.py).
@@ -44,6 +47,8 @@ FIELDS = "places.id,places.displayName,places.formattedAddress,places.location,p
 DAILY_CAP = int(os.environ.get("PLACES_DAILY_CAP", "100"))
 COST_PER_CALL = float(os.environ.get("PLACES_COST_PER_CALL_USD", "0.035"))
 PROVIDER = "google_places"
+MATCH_THRESHOLD = 0.8      # same value as the HubSpot view
+RETRY_DAYS = int(os.environ.get("PLACES_RETRY_DAYS", "7"))
 MAX_CONSECUTIVE_ERRORS = 10
 
 
@@ -106,7 +111,10 @@ LEFT JOIN company_reviews r ON r.establishment_id = a.establishment_id AND r.pro
 WHERE a.status='active' AND c.is_diffusible AND a.address_status='verified'
   AND a.latitude IS NOT NULL AND a.longitude IS NOT NULL
   AND COALESCE(NULLIF(a.establishment_name,''), NULLIF(c.trading_name,''), c.legal_name) IS NOT NULL
-  AND (r.review_id IS NULL OR r.collected_at < now() - make_interval(days => %(days)s))
+  AND (r.review_id IS NULL
+       OR (r.status = 'inaccessible' AND COALESCE(r.last_attempt_at, r.collected_at) < now() - make_interval(days => %(retry)s))
+       OR (r.status IS DISTINCT FROM 'inaccessible' AND r.collected_at < now() - make_interval(days => %(days)s)
+           AND COALESCE(r.last_attempt_at, r.collected_at) < now() - make_interval(days => %(retry)s)))
   AND (%(naf)s::text[] IS NULL OR EXISTS (SELECT 1 FROM unnest(%(naf)s::text[]) p WHERE COALESCE(a.naf, c.main_naf) LIKE p || '%%'))
   AND (%(dep)s::text[] IS NULL OR a.department_code = ANY(%(dep)s::text[]))
 ORDER BY r.collected_at NULLS FIRST, a.establishment_id
@@ -119,15 +127,26 @@ def _list_env(name: str) -> Optional[list[str]]:
     return v or None
 
 
+def mark_inaccessible(conn, est_id: int, detail: str) -> None:
+    """The call failed. Nothing already stored is touched; an establishment with no data yet gets an 'inaccessible' row."""
+    conn.execute(
+        """INSERT INTO company_reviews (establishment_id, provider, status, last_attempt_at, error_detail)
+           VALUES (%s,'google_places','inaccessible',now(),%s)
+           ON CONFLICT (establishment_id, provider) DO UPDATE SET last_attempt_at=now(), error_detail=EXCLUDED.error_detail,
+             status = CASE WHEN company_reviews.provider_place_id IS NULL AND company_reviews.rating IS NULL
+                           THEN 'inaccessible' ELSE company_reviews.status END""",
+        (est_id, detail[:200]))
+
+
 def run(dsn: str, client=None, limit: int = 100, refresh_days: int = 30, cap: int = DAILY_CAP,
-        naf_prefixes: Optional[list[str]] = None, departments: Optional[list[str]] = None) -> dict:
+        retry_days: int = RETRY_DAYS, naf_prefixes: Optional[list[str]] = None, departments: Optional[list[str]] = None) -> dict:
     client = client or PlacesClient()
     naf_prefixes = naf_prefixes if naf_prefixes is not None else _list_env("PLACES_NAF_PREFIXES")
     departments = departments if departments is not None else _list_env("PLACES_DEPARTMENTS")
     stats = {"read": 0, "matched": 0, "low_confidence_or_none": 0, "errors": 0, "calls": 0,
              "est_cost_usd": 0.0, "cap_reached": False, "stopped_billing": False}
     with psycopg.connect(dsn) as conn:
-        due = conn.execute(SELECT_DUE, {"days": refresh_days, "limit": limit, "naf": naf_prefixes, "dep": departments}).fetchall()
+        due = conn.execute(SELECT_DUE, {"days": refresh_days, "retry": retry_days, "limit": limit, "naf": naf_prefixes, "dep": departments}).fetchall()
         consecutive = 0
         for est_id, name, street, postal, city, lat, lon in due:
             if not usage.reserve(conn, PROVIDER, cap, 1):
@@ -149,6 +168,8 @@ def run(dsn: str, client=None, limit: int = 100, refresh_days: int = 30, cap: in
                 stats["errors"] += 1
                 consecutive += 1
                 log.warning("Places lookup failed for establishment %s: %s", est_id, exc)
+                mark_inaccessible(conn, est_id, str(exc))
+                conn.commit()
                 if consecutive >= MAX_CONSECUTIVE_ERRORS:
                     break
                 continue
@@ -156,16 +177,19 @@ def run(dsn: str, client=None, limit: int = 100, refresh_days: int = 30, cap: in
             stats["est_cost_usd"] = round(stats["calls"] * COST_PER_CALL, 4)
             m = best_match(name, lat, lon, places)
             place, conf = m if m else ({}, 0.0)
+            status = "matched" if conf >= MATCH_THRESHOLD else ("to_verify" if place.get("id") else "not_found")
             conn.execute(
                 """INSERT INTO company_reviews (establishment_id, provider, provider_place_id, rating, review_count, profile_url,
-                                                match_confidence, collected_at)
-                   VALUES (%s,'google_places',%s,%s,%s,%s,%s,now())
+                                                match_confidence, collected_at, status, last_attempt_at, error_detail)
+                   VALUES (%s,'google_places',%s,%s,%s,%s,%s,now(),%s,now(),NULL)
                    ON CONFLICT (establishment_id, provider) DO UPDATE SET provider_place_id=EXCLUDED.provider_place_id,
                      rating=EXCLUDED.rating, review_count=EXCLUDED.review_count, profile_url=EXCLUDED.profile_url,
-                     match_confidence=EXCLUDED.match_confidence, collected_at=now()""",
-                (est_id, place.get("id"), place.get("rating"), place.get("userRatingCount"), place.get("googleMapsUri"), conf))
+                     match_confidence=EXCLUDED.match_confidence, collected_at=now(), status=EXCLUDED.status,
+                     last_attempt_at=now(), error_detail=NULL""",
+                (est_id, place.get("id"), place.get("rating"), place.get("userRatingCount"), place.get("googleMapsUri"), conf,
+                 status))
             conn.commit()
-            stats["matched" if conf >= 0.8 else "low_confidence_or_none"] += 1
+            stats["matched" if conf >= MATCH_THRESHOLD else "low_confidence_or_none"] += 1
     return stats
 
 

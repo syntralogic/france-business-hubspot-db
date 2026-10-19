@@ -60,7 +60,78 @@ def test_selection_matching_cap_and_refresh(db):
     s3 = places.run(DSN, fake, limit=10, cap=3, naf_prefixes=["99"])
     assert s3["read"] == 0                                      # NAF filter honoured
     with psycopg.connect(DSN) as c:
-        c.execute("UPDATE company_reviews SET collected_at = now() - interval '40 days'")
+        c.execute("UPDATE company_reviews SET collected_at = now() - interval '40 days', last_attempt_at = now() - interval '40 days'")
         c.commit()
     s4 = places.run(DSN, fake, limit=10, cap=3)                 # stale rows due again but today's cap (3) is already used
     assert s4["read"] == 0 and s4["cap_reached"]
+
+
+class Flaky:
+    """ALPHA works the first time and fails after; GAMMA always fails; BETA always fails with a quota error when asked to."""
+    def __init__(self):
+        self.fail = set()
+
+    def search(self, query, lat, lon):
+        for name in self.fail:
+            if name in query:
+                raise RuntimeError("HTTP 503")
+        return Fake().search(query, lat, lon)
+
+
+def _status(c):
+    return dict(c.execute("SELECT s.siren, r.status FROM company_reviews r JOIN company_addresses a USING (establishment_id) "
+                          "JOIN companies s USING (company_id)").fetchall())
+
+
+def test_status_matched_to_verify_not_found_and_not_searched(db):
+    places.run(DSN, Fake(), limit=10, cap=10)
+    with psycopg.connect(DSN) as c:
+        assert _status(c) == {"552100554": "matched", "732829320": "to_verify", "404833048": "not_found"}
+        # UNVERIFIED address and HIDDEN company were never searched: no row = "not searched"
+        assert c.execute("SELECT count(*) FROM company_reviews").fetchone()[0] == 3
+
+
+def test_failed_call_is_inaccessible_retried_after_7_days_and_never_erases_a_stored_rating(db):
+    fl = Flaky()
+    places.run(DSN, fl, limit=10, cap=50)                       # everything works once
+    with psycopg.connect(DSN) as c:
+        c.execute("UPDATE company_reviews SET collected_at = now() - interval '40 days', last_attempt_at = now() - interval '40 days'")
+        c.commit()
+    fl.fail = {"ALPHA", "GAMMA"}
+    s = places.run(DSN, fl, limit=10, cap=50)
+    assert s["errors"] == 2
+    with psycopg.connect(DSN) as c:
+        st = _status(c)
+        assert st["552100554"] == "matched"                      # had a rating: status and rating kept
+        assert c.execute("SELECT rating::float FROM company_reviews WHERE provider_place_id='PL1'").fetchone()[0] == 4.6
+        assert st["404833048"] == "inaccessible"                 # had nothing: now says why
+        assert c.execute("SELECT error_detail FROM company_reviews WHERE status='inaccessible'").fetchone()[0] == "HTTP 503"
+    again = places.run(DSN, fl, limit=10, cap=50)
+    assert again["read"] == 0 and again["errors"] == 0           # both failed today: neither is asked again before 7 days
+    with psycopg.connect(DSN) as c:
+        assert c.execute("SELECT count(*) FROM company_reviews WHERE status='inaccessible'").fetchone()[0] == 1
+
+
+def test_inaccessible_waits_retry_days_then_is_asked_again(db):
+    fl = Flaky()
+    fl.fail = {"GAMMA"}
+    places.run(DSN, fl, limit=10, cap=50)
+    fl.fail = set()
+    assert places.run(DSN, fl, limit=10, cap=50)["read"] == 0   # failed today: not asked again before 7 days
+    with psycopg.connect(DSN) as c:
+        c.execute("UPDATE company_reviews SET last_attempt_at = now() - interval '8 days' WHERE status='inaccessible'")
+        c.commit()
+    assert places.run(DSN, fl, limit=10, cap=50)["read"] == 1
+    with psycopg.connect(DSN) as c:
+        assert _status(c)["404833048"] == "not_found"
+        assert c.execute("SELECT error_detail FROM company_reviews WHERE status='not_found'").fetchone()[0] is None
+
+
+def test_021_idempotent_and_backfills_old_rows(db):
+    with psycopg.connect(DSN, autocommit=True) as c:
+        eid = c.execute("SELECT establishment_id FROM company_addresses LIMIT 1").fetchone()[0]
+        c.execute("INSERT INTO company_reviews (establishment_id, provider, provider_place_id, match_confidence) VALUES (%s,'google_places','X',0.5)", (eid,))
+        c.execute("UPDATE company_reviews SET status = NULL")
+        for _ in range(2):
+            c.execute((SQL_DIR / "021_places_status.sql").read_text(encoding="utf-8"))
+        assert c.execute("SELECT status FROM company_reviews").fetchone()[0] == "to_verify"
