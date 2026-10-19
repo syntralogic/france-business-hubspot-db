@@ -65,3 +65,30 @@ def test_stats_and_read_only_connection(db):
     with api._connect(DSN) as conn:
         with pytest.raises(psycopg.errors.ReadOnlySqlTransaction):
             conn.execute("DELETE FROM companies")
+
+
+def test_company_detail_sections_and_privacy(db):
+    with psycopg.connect(DSN, autocommit=True) as conn:
+        cid = conn.execute("SELECT company_id FROM companies WHERE siren=%s", (A,)).fetchone()[0]
+        conn.execute("INSERT INTO company_financials (company_id, fiscal_year, period_end, revenue_eur, equity_eur, cash_eur, debt_eur) "
+                     "VALUES (%s,2025,'2025-12-31',1000000,250000,40000,90000)", (cid,))
+        conn.execute("INSERT INTO company_certifications (company_id, cert_type, cert_label, valid_to, certificate_url) "
+                     "VALUES (%s,'Qualibat','2111','2099-01-01','https://example.org/c/1')", (cid,))
+        conn.execute("INSERT INTO company_activities (company_id, facet, code, label, matched_text, passage, source_url) "
+                     "VALUES (%s,'trade','boulanger','Boulangerie','pain','Notre pain','https://alpha.fr/')", (cid,))
+        conn.execute("INSERT INTO company_site_declarations (company_id, kind, value, number, qualifier, passage, source_url) "
+                     "VALUES (%s,'team_size','12',12,'exact','equipe de 12 personnes','https://alpha.fr/')", (cid,))
+        conn.execute("INSERT INTO company_relations (company_id, related_siren, related_name, role) VALUES (%s,'401234562','HOLDING','Président')", (cid,))
+        conn.execute("INSERT INTO company_register_events (company_id, event_type, event_date, detail, basis, ref_key) "
+                     "VALUES (%s,'new_establishment',current_date,'69001 LYON','sirene_creation_date','X')", (cid,))
+    d = api.company_detail(DSN, A)
+    assert d["legal_name"] == "ALPHA BOULANGERIE SARL"
+    assert d["financials"][0]["equity_eur"] == 250000 and d["financials"][0]["debt_eur"] == 90000
+    assert d["certificates"][0]["certificate_url"] == "https://example.org/c/1" and d["certificates"][0]["has_attestation"] is False
+    assert d["activities"][0]["source_url"] == "https://alpha.fr/" and d["declarations"][0]["value"] == "12"
+    assert d["relations"][0]["role"] == "Président" and d["events"][0]["event_type"] == "new_establishment"
+    flat = str(d)
+    assert "phone" not in flat and "0102030405" not in flat and "content" not in d["certificates"][0]   # no contacts, no document bytes
+    assert api.company_detail(DSN, C) is None and api.company_detail(DSN, B) is None and api.company_detail(DSN, "12") is None   # EI, non-diffusible
+    assert api.DbApi(DSN).handle("/api/company", {"siren": [A]})[0] == 200
+    assert api.DbApi(DSN).handle("/api/company", {"siren": ["999999999"]})[0] == 404

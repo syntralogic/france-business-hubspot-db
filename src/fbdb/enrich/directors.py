@@ -21,7 +21,8 @@ import os
 
 import psycopg
 
-from fbdb.enrich.annuaire import AnnuaireClient, map_dirigeants
+from fbdb.enrich.annuaire import AnnuaireClient, map_dirigeants, map_legal_entity_officers
+from fbdb.enrich.company_relations import refresh_relations
 
 log = logging.getLogger("fbdb.directors")
 MAX_CONSECUTIVE_ERRORS = 20
@@ -89,7 +90,7 @@ def refresh_company(cur, company_id: int, mapped: list[dict], source_id: int, ba
 
 def run(dsn: str, client=None, limit: int = 5000, refresh_days: int = 30) -> dict:
     client = client or AnnuaireClient()
-    stats = {"read": 0, "added": 0, "removed": 0, "updated": 0, "unchanged": 0, "not_found": 0, "errors": 0}
+    stats = {"read": 0, "added": 0, "removed": 0, "updated": 0, "unchanged": 0, "not_found": 0, "errors": 0, "relations_changed": 0}
     with psycopg.connect(dsn) as conn, conn.cursor() as cur:
         cur.execute("SELECT source_id FROM data_sources WHERE code = 'annuaire'")
         source_id = cur.fetchone()[0]
@@ -123,6 +124,7 @@ def run(dsn: str, client=None, limit: int = 5000, refresh_days: int = 30) -> dic
                 added, removed = refresh_company(cur, company_id, map_dirigeants(result), source_id, batch_id)
                 stats["added"] += added
                 stats["removed"] += removed
+                stats["relations_changed"] += refresh_relations(cur, company_id, map_legal_entity_officers(result), source_id, batch_id)
                 if added or removed:
                     stats["updated"] += 1
                 else:

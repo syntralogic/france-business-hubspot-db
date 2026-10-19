@@ -12,6 +12,9 @@ Endpoints (GET, JSON):
   /api/companies?q=&dept=&city=&rge=1&page=1&per_page=25
         q    : company name fragment, or a 9-digit SIREN / 14-digit SIRET
         dept : department code (e.g. 75, 2A)     city : city name fragment     rge=1 : only RGE-certified
+  /api/company?siren=NNNNNNNNN       detail of one company: financial exercises (with balance figures), certificates (link, and only
+                                     WHETHER an attestation document exists, never the file), activities and declarations read from
+                                     the site (each with its page URL), legal relations, register events (agency opening, activity)
 """
 from __future__ import annotations
 
@@ -99,6 +102,38 @@ def stats(dsn: str, ttl: float = 60.0) -> dict:
     return row
 
 
+DETAIL_SECTIONS = {
+    "financials": ("SELECT f.fiscal_year, f.period_end, f.duration_months, f.revenue_eur, f.net_result_eur, f.equity_eur, f.cash_eur, "
+                   "f.debt_eur, f.employees FROM company_financials f WHERE f.company_id = %s "
+                   "ORDER BY f.fiscal_year DESC, f.period_end DESC NULLS LAST LIMIT 5"),
+    "certificates": ("SELECT cert_type, cert_label, valid_from, valid_to, is_current, certificate_url, has_attestation "
+                     "FROM v_company_certificates WHERE company_id = %s ORDER BY is_current DESC, cert_type, valid_to DESC NULLS LAST LIMIT 50"),
+    "activities": ("SELECT facet, label, source_url FROM company_activities WHERE company_id = %s ORDER BY facet, label LIMIT 100"),
+    "declarations": ("SELECT kind, value, number, qualifier, source_url FROM company_site_declarations WHERE company_id = %s "
+                     "ORDER BY kind, value LIMIT 50"),
+    "relations": ("SELECT related_siren, related_name, related_in_base, role, is_active FROM v_company_relations "
+                  "WHERE company_id = %s ORDER BY is_active DESC, related_name LIMIT 20"),
+    "events": ("SELECT event_type, event_date, detail, basis FROM company_register_events WHERE company_id = %s "
+               "ORDER BY event_date DESC LIMIT 20"),
+}
+
+
+def company_detail(dsn: str, siren: str) -> Optional[dict]:
+    """Detail sections of one company, or None when it is unknown, a sole proprietor or not diffusible."""
+    siren = "".join(ch for ch in (siren or "") if ch.isdigit())
+    if len(siren) != 9:
+        return None
+    with _connect(dsn) as conn:
+        head = conn.execute(
+            "SELECT company_id, siren, legal_name FROM companies WHERE siren = %s AND is_diffusible AND NOT is_sole_proprietor", (siren,)).fetchone()
+        if not head:
+            return None
+        out = {"siren": head["siren"], "legal_name": head["legal_name"]}
+        for name, sql in DETAIL_SECTIONS.items():
+            out[name] = conn.execute(sql, (head["company_id"],)).fetchall()
+    return out
+
+
 class DbApi:
     """What fbdb.web calls; tests replace it with a fake."""
 
@@ -112,4 +147,8 @@ class DbApi:
             return 200, stats(self.dsn)
         if path == "/api/companies":
             return 200, search_companies(self.dsn, params)
+        if path == "/api/company":
+            siren = params.get("siren")
+            detail = company_detail(self.dsn, (siren[0] if isinstance(siren, list) else siren) or "")
+            return (200, detail) if detail else (404, {"error": "not found"})
         return 404, {"error": "not found"}

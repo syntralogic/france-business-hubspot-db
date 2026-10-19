@@ -262,6 +262,34 @@ Migration `sql/026_certificate_documents.sql`, module `fbdb.enrich.certificate_d
 - Metrics: `match_companies_with_certificate_link`, `match_companies_with_attestation_in_date`.
 - **Open / limits**: the file is stored in PostgreSQL (bytea): fine for hundreds or a few thousand attestations on the Render database; beyond that move the files to object storage and keep the hash (not built). An attestation can carry personal data of a sole proprietor: retention period and legal basis are a client / DPO decision, not decided here. Nothing checks that the insurer or the policy on the document is real: a document on file means "we hold this file", not "the insurance is valid". No real Qualibat / Qualifelec / RC pro file has been loaded (they need a licence).
 
+### G5. Agency opening, new activity and documented legal relations (spec section 12, parts 4 and 5)
+
+Migration `sql/027_relations_events.sql` (tables `company_relations`, `company_register_events`, view `v_company_relations`).
+
+**Legal relations** (`fbdb.enrich.company_relations`, filled by `fbdb.enrich.directors` from the SAME Annuaire answer, no extra call): only what the
+register writes, a legal entity (valid SIREN of its own) that holds an office (Président, Gérant, Administrateur...) in the company, typically a
+holding or parent. `related_company_id` is set when that SIREN is in our base. Commissaires aux comptes are dropped (not a group link). A relation that
+is no longer listed becomes `is_active=false` with `ended_on`; every change goes to `company_change_history`. Partners and clients listed on a website
+stay what they were (a name, never matched to a company): only the register creates a link.
+
+**Agency opening / new activity** (`fbdb.enrich.register_events`, weekly step `register_events` after `bodacc`, `--days 365`): read from the register,
+never from a site.
+- `new_establishment`: active, diffusible, non head-office establishment created in the window while the company already had an older one. SIRENE cannot
+  separate a real opening from a transfer or re-registration: it is a signal to look at, not proof of expansion.
+- `activity_change`: the company's main NAF changed in the weekly delta. A batch that changes more than max(1000, 2% of active companies) is treated as a
+  nomenclature reclassification and produces no event (logged as a warning); relevant because a NAF revision is announced.
+- `bodacc_establishment` / `bodacc_activity`: BODACC notices outside the collective/radiation families whose own label says an establishment was opened or
+  the activity changed (only the label is read, `bodacc_events` keeps no notice text). **Not verified on the live API**: fetch with
+  `BODACC_FAMILIES=collective,radiation,creation,modification`, read the stored `family_label` / `avis_type` values, then adjust `classify_notice()`.
+  Other families now raise no data-quality issue (before, any unknown family would have been logged as a radiation).
+
+**Public API** (`/api/company?siren=`): one company's financial exercises (with balance figures), certificates (link; only WHETHER an attestation document exists, never the file),
+site activities and declarations with their page URL, legal relations and register events. No contacts, directors or Google data; sole proprietors and non-diffusible companies return 404.
+The viewer shows it in a detail panel.
+
+Not done on purpose: followers and last post (spec section 9, optional): the pages are behind a login wall and a scrape would be unreliable; add it only if the client accepts an official API per network.
+The section numbers in these docs follow the client's document: 10 = reviews / Google Places, 11 = certifications and insurance (checked, nothing is swapped).
+
 ## First test lot: what to measure (client's last paragraph)
 `python -m fbdb.report.metrics` now reports (report only, no target agreed): `match_companies_with_proven_website`, `match_companies_with_interlocutor`, `match_companies_with_social_account` (confirmed accounts only), `match_companies_with_social_to_verify` (candidates found by search, no proof, no confirmed account), `match_companies_with_activity_claims` (at least one claim read from the proven site), `match_companies_with_public_contracts` (at least one DECP contract in the loaded files), `match_companies_with_press` / `match_companies_with_press_to_verify` (press confirmed with a proof / candidates only), `match_companies_with_site_signals` (at least one realisation / partner / recruitment claim read from the proven site), `match_directors_with_mobile_linked` (a +336/+337 number attached to the director with evidence, not merely held by the company), `match_directors_with_verified_email_linked`, `match_directors_with_any_email_linked` (includes provider hypotheses), `match_directors_decision_maker_confirmed`.
 Suggested order for the test lot of ~100 companies (all paid steps start with `--limit 5`, read the log, then widen):

@@ -32,6 +32,7 @@ step weekly_delta python -m fbdb.load.weekly
 step directors python -m fbdb.enrich.directors --limit "${DIRECTORS_PER_RUN:-5000}"
 step geocode python -m fbdb.enrich.geocode --limit "${GEOCODE_PER_RUN:-200000}"
 step bodacc python -m fbdb.enrich.bodacc --days "${BODACC_DAYS:-8}"
+step register_events python -m fbdb.enrich.register_events --days "${REGISTER_EVENTS_DAYS:-365}"
 if [ -n "${INPI_USERNAME:-}" ]; then step inpi python -m fbdb.enrich.inpi --limit "${INPI_PER_RUN:-500}"; else skip inpi "INPI_USERNAME not set"; fi
 if [ -n "${PAPPERS_API_KEY:-}" ]; then step pappers python -m fbdb.enrich.pappers --limit "${PAPPERS_PER_RUN:-200}"; else skip pappers "PAPPERS_API_KEY not set"; fi
 if [ -n "${GOOGLE_PLACES_API_KEY:-}" ]; then step places python -m fbdb.enrich.places --limit "${PLACES_PER_RUN:-100}"; else skip places "GOOGLE_PLACES_API_KEY not set"; fi

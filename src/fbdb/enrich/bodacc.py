@@ -36,7 +36,8 @@ BASE = os.environ.get(
 DEFAULT_FAMILIES = os.environ.get("BODACC_FAMILIES", "collective,radiation")
 PAGE = 100
 OFFSET_CAP = 10000
-ISSUE = {"collective": ("BODACC_COLLECTIVE_PROCEDURE", "warning")}  # any other family -> BODACC_RADIATION style info below
+ISSUE = {"collective": ("BODACC_COLLECTIVE_PROCEDURE", "warning"), "radiation": ("BODACC_RADIATION", "info")}
+# any other family (creation, modification...) is stored but raises no data-quality issue: it feeds register_events instead
 
 
 class RetryableError(Exception):
@@ -126,7 +127,9 @@ def run(dsn: str, days: int = 8, families: str = DEFAULT_FAMILIES, today: Option
             if cur.rowcount == 0:
                 continue
             stats["stored"] += 1
-            code, sev = ISSUE.get(ev["family"], ("BODACC_RADIATION", "info"))
+            if ev["family"] not in ISSUE:
+                continue
+            code, sev = ISSUE[ev["family"]]
             cur = conn.execute(
                 """INSERT INTO data_quality_issues(company_id, issue_code, severity, field_name, details)
                    SELECT company_id, %s, %s, 'status', %s FROM companies WHERE siren=%s""",

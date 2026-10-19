@@ -62,6 +62,32 @@ def map_dirigeants(result: dict) -> list[dict]:
     return out
 
 
+AUDITOR = re.compile(r"(?i)commissaire\s+aux\s+comptes|\bcac\b")
+
+
+def map_legal_entity_officers(result: dict) -> list[dict]:
+    """Legal entities (personne morale) that hold an office in the company, as the register writes them.
+
+    Returns dicts {siren, name, role}: a valid 9-digit SIREN is required (no SIREN, no documented relation), the company itself
+    is skipped, auditors (commissaire aux comptes) are not a group link and are dropped, duplicates (same siren and role) collapse.
+    """
+    from fbdb.transform.normalize import is_valid_siren
+    own = _clean(result.get("siren"))
+    out, seen = [], set()
+    for d in result.get("dirigeants") or []:
+        if _clean(d.get("type_dirigeant")).lower() != "personne morale":
+            continue
+        siren = re.sub(r"\D", "", str(d.get("siren") or ""))
+        role = _clean(d.get("qualite"))
+        if not is_valid_siren(siren) or siren == own or AUDITOR.search(role):
+            continue
+        if (siren, role) in seen:
+            continue
+        seen.add((siren, role))
+        out.append({"siren": siren, "name": _clean(d.get("denomination")) or None, "role": role})
+    return out
+
+
 class AnnuaireClient:
     def __init__(self, timeout: float = 30.0):
         self._throttle = Throttle(MIN_INTERVAL_S)
