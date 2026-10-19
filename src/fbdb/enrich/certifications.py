@@ -5,7 +5,8 @@ directories but their terms do not allow bulk copying, so this loader is PROVIDE
 comes as a CSV under a signed licence (or the client's own extract) and is matched EXACTLY on SIRET (establishment) or SIREN
 (company). Refuses to run without a contract reference (--contract-ref or CERTIFICATIONS_CONTRACT_REF), written to the batch notes.
 
-CSV columns (mapping overridable): siret, siren, cert_type, label, valid_from, valid_to (ISO dates or DD/MM/YYYY).
+CSV columns (mapping overridable): siret, siren, cert_type, label, valid_from, valid_to (ISO dates or DD/MM/YYYY), and optionally
+certificate_url (link to the certificate / directory entry as the provider gives it; only http(s) links are kept).
 cert_type is normalised to: Qualibat, Qualifelec, Qualit'EnR, RC pro, Decennale. Anything else is rejected, never guessed.
 Only active, diffusible companies; existing rows are never deleted (a partial file removes nothing); rejects go to a CSV.
 
@@ -28,6 +29,7 @@ import unicodedata
 from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 import psycopg
 
@@ -36,7 +38,7 @@ from fbdb.transform.normalize import is_valid_siren, is_valid_siret
 
 log = logging.getLogger("fbdb.certifications")
 DEFAULT_MAPPING = {"siret": "siret", "siren": "siren", "cert_type": "cert_type", "label": "label",
-                   "valid_from": "valid_from", "valid_to": "valid_to"}
+                   "valid_from": "valid_from", "valid_to": "valid_to", "certificate_url": "certificate_url"}
 CERT_TYPES = {"qualibat": "Qualibat", "qualifelec": "Qualifelec", "qualitenr": "Qualit'EnR", "rcpro": "RC pro",
               "decennale": "Decennale", "assurancedecennale": "Decennale", "rcprofessionnelle": "RC pro"}
 SOURCE_CODE = {"Qualibat": "qualibat", "Qualifelec": "qualifelec", "Qualit'EnR": "qualitenr"}   # others: certification_file
@@ -51,6 +53,15 @@ class LicenceError(RuntimeError):
 def normalize_cert_type(raw: str) -> Optional[str]:
     s = unicodedata.normalize("NFKD", raw or "").encode("ascii", "ignore").decode().lower()
     return CERT_TYPES.get("".join(ch for ch in s if ch.isalnum()))
+
+
+def clean_url(raw: str) -> Optional[str]:
+    """An http(s) link without spaces, at most 2000 characters; anything else is None (never repaired or guessed)."""
+    raw = (raw or "").strip()
+    if not raw or len(raw) > 2000 or any(ch.isspace() for ch in raw):
+        return None
+    u = urlparse(raw)
+    return raw if u.scheme.lower() in ("http", "https") and u.netloc else None
 
 
 def parse_date(raw: str) -> Optional[date]:
@@ -82,7 +93,9 @@ def parse_row(row: dict, mapping: dict) -> tuple[Optional[str], Optional[str], O
         return None, None, None, ("BAD_DATE", get("valid_to"))
     if vf and vt and vt < vf:
         return None, None, None, ("BAD_DATE", f"{vf} > {vt}")
-    return (siret or None), siren, {"type": ctype, "label": get("label") or None, "valid_from": vf, "valid_to": vt}, None
+    raw_url = get("certificate_url")
+    return (siret or None), siren, {"type": ctype, "label": get("label") or None, "valid_from": vf, "valid_to": vt,
+                                    "certificate_url": clean_url(raw_url), "url_invalid": raw_url if raw_url and not clean_url(raw_url) else None}, None
 
 
 def load(dsn: str, path: str, contract_ref: Optional[str], mapping: Optional[dict] = None, rejects_path: Optional[str] = None,
@@ -91,7 +104,7 @@ def load(dsn: str, path: str, contract_ref: Optional[str], mapping: Optional[dic
     if not ref:
         raise LicenceError("Refusing to load certifications without a contract/licence reference (--contract-ref)")
     mapping = {**DEFAULT_MAPPING, **(mapping or {})}
-    stats = {"rows": 0, "inserted": 0, "already_known": 0, "not_in_base": 0, "rejected": 0, "conflicts": 0}
+    stats = {"rows": 0, "inserted": 0, "already_known": 0, "not_in_base": 0, "rejected": 0, "conflicts": 0, "urls_added": 0, "urls_invalid": 0}
     seen_types: set[str] = set()
     rejects_path = rejects_path or str(Path(path).with_suffix(".rejects.csv"))
     with psycopg.connect(dsn) as conn, open(path, newline="", encoding="utf-8-sig") as fh, \
@@ -114,6 +127,10 @@ def load(dsn: str, path: str, contract_ref: Optional[str], mapping: Optional[dic
                 rejects.writerow({"line": i, "siret": siret or "", "siren": siren or "", "code": err[0], "detail": err[1]})
                 continue
             seen_types.add(cert["type"])
+            if cert["url_invalid"]:
+                # the certification is still loaded; only the unusable link is dropped (counted, never repaired)
+                stats["urls_invalid"] += 1
+                log.warning("line %s: certificate_url ignored (not an http(s) link): %.80s", i, cert["url_invalid"])
             comp = conn.execute("SELECT company_id FROM companies WHERE siren=%s AND status='active' AND is_diffusible", (siren,)).fetchone()
             if not comp:
                 stats["not_in_base"] += 1
@@ -124,7 +141,7 @@ def load(dsn: str, path: str, contract_ref: Optional[str], mapping: Optional[dic
                 est_id = e[0] if e else None
             sid = src.get(SOURCE_CODE.get(cert["type"], "")) or src.get(GENERIC_SOURCE)
             exists = conn.execute(
-                """SELECT certification_id, valid_to FROM company_certifications WHERE company_id=%s AND cert_type=%s
+                """SELECT certification_id, valid_to, certificate_url FROM company_certifications WHERE company_id=%s AND cert_type=%s
                      AND COALESCE(cert_label,'')=COALESCE(%s,'') AND valid_from IS NOT DISTINCT FROM %s""",
                 (comp[0], cert["type"], cert["label"], cert["valid_from"])).fetchone()
             if exists:
@@ -134,12 +151,21 @@ def load(dsn: str, path: str, contract_ref: Optional[str], mapping: Optional[dic
                     field = f"certification:{cert['type']}:{cert['label'] or '-'}:{cert['valid_from'] or '-'}:valid_to"
                     record_conflict(conn, comp[0], field, exists[1] or "none", sid, cert["valid_to"], sid)
                     stats["conflicts"] += 1
+                if cert["certificate_url"]:
+                    if exists[2] is None:
+                        conn.execute("UPDATE company_certifications SET certificate_url=%s WHERE certification_id=%s", (cert["certificate_url"], exists[0]))
+                        stats["urls_added"] += 1
+                    elif exists[2] != cert["certificate_url"]:           # first link kept, the other one is recorded
+                        field = f"certification:{cert['type']}:{cert['label'] or '-'}:{cert['valid_from'] or '-'}:certificate_url"
+                        record_conflict(conn, comp[0], field, exists[2], sid, cert["certificate_url"], sid)
+                        stats["conflicts"] += 1
                 continue
             conn.execute(
                 """INSERT INTO company_certifications (company_id, establishment_id, cert_type, cert_label, valid_from, valid_to,
-                     source_id, load_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
-                (comp[0], est_id, cert["type"], cert["label"], cert["valid_from"], cert["valid_to"], sid, load_id))
+                     source_id, load_id, certificate_url) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                (comp[0], est_id, cert["type"], cert["label"], cert["valid_from"], cert["valid_to"], sid, load_id, cert["certificate_url"]))
             stats["inserted"] += 1
+            stats["urls_added"] += 1 if cert["certificate_url"] else 0
             if stats["rows"] % 1000 == 0:
                 conn.commit()
         conn.execute(

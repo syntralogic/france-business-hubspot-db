@@ -170,6 +170,13 @@ def collect(dsn: str, threshold_note: float = 0.6, target_rows: int = 500_000) -
         use_known, use_total = one("""SELECT count(*) FILTER (WHERE contact_use IS NOT NULL), count(*) FROM company_contacts
               WHERE contact_type='email' AND value_status IN ('verified','sourced')""")
         rates["match_emails_with_known_function"] = div(use_known, use_total)
+        # certificate link supplied by a file (a link, never a scraped page) and RC pro / decennale attestation documents on file and still in date
+        with_link = one("""SELECT count(*) FROM companies c WHERE c.status='active' AND c.is_diffusible
+              AND EXISTS (SELECT 1 FROM company_certifications t WHERE t.company_id=c.company_id AND t.certificate_url IS NOT NULL)""")[0]
+        rates["match_companies_with_certificate_link"] = div(with_link, comp)
+        att_ok = one("""SELECT count(*) FROM companies c WHERE c.status='active' AND c.is_diffusible
+              AND EXISTS (SELECT 1 FROM v_attestation_status a WHERE a.company_id=c.company_id AND a.attestation_status='document_current')""")[0]
+        rates["match_companies_with_attestation_in_date"] = div(att_ok, comp)
         rates["match_directors_with_mobile_linked"] = div(d_mobile, dirs)          # mobile attached to the person (with evidence), not just the company
         rates["match_directors_with_verified_email_linked"] = div(d_email, dirs)   # deliverable per verifier + attached to the person
         rates["match_directors_with_any_email_linked"] = div(d_email_any, dirs)    # includes provider hypotheses ('inferred')
