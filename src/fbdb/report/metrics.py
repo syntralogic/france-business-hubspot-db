@@ -151,6 +151,14 @@ def collect(dsn: str, threshold_note: float = 0.6, target_rows: int = 500_000) -
         with_signals = one("""SELECT count(*) FROM companies c WHERE c.status='active' AND c.is_diffusible
               AND EXISTS (SELECT 1 FROM company_site_signals s WHERE s.company_id=c.company_id)""")[0]
         rates["match_companies_with_site_signals"] = div(with_signals, comp)
+        # press / web mentions: confirmed = proven to be about THIS company; to_verify = name found, no proof (homonyms), companies with no confirmed article
+        press_ok = one("""SELECT count(*) FROM companies c WHERE c.status='active' AND c.is_diffusible
+              AND EXISTS (SELECT 1 FROM company_press x WHERE x.company_id=c.company_id AND x.status='confirmed')""")[0]
+        press_tv = one("""SELECT count(*) FROM companies c WHERE c.status='active' AND c.is_diffusible
+              AND EXISTS (SELECT 1 FROM company_press x WHERE x.company_id=c.company_id AND x.status='to_verify')
+              AND NOT EXISTS (SELECT 1 FROM company_press x WHERE x.company_id=c.company_id AND x.status='confirmed')""")[0]
+        rates["match_companies_with_press"] = div(press_ok, comp)
+        rates["match_companies_with_press_to_verify"] = div(press_tv, comp)
         rates["match_directors_with_mobile_linked"] = div(d_mobile, dirs)          # mobile attached to the person (with evidence), not just the company
         rates["match_directors_with_verified_email_linked"] = div(d_email, dirs)   # deliverable per verifier + attached to the person
         rates["match_directors_with_any_email_linked"] = div(d_email_any, dirs)    # includes provider hypotheses ('inferred')
