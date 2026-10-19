@@ -7,6 +7,10 @@ refreshed daily by ADEME, ~60k companies / ~160k certificates. Download the CSV 
 Per matched establishment the loader REPLACES its ADEME rows in company_certifications (cert_type 'RGE'), so a
 re-run is idempotent and certificates that left the list disappear for the establishments present in the file.
 SIRETs that match nothing in our base go to a rejects CSV; nothing is created from this file.
+Each file is recorded in certification_loads (sql/022) and its rows point to it (load_id); v_certification_status then says
+found_valid / found_not_current / none_in_loaded_files for 'RGE'. An establishment that is NOT in a later file keeps its old
+rows (last_seen_at shows when ADEME last listed it): decide with the client whether a row not seen in the latest full file may
+still be exported.
 
 Usage: python -m fbdb.enrich.ademe_rge FILE.csv [--rejects data/exports/rge_rejects.csv]
 Needs: DATABASE_URL.
@@ -79,6 +83,9 @@ def run(dsn: str, path: str, rejects_path: Optional[str] = None) -> dict:
     stats["rows"] = len(rows)
     with psycopg.connect(dsn) as conn:
         src = conn.execute("SELECT source_id FROM data_sources WHERE code='ademe_rge'").fetchone()[0]
+        load_id = conn.execute(
+            "INSERT INTO certification_loads (provider, cert_types, file_name, coverage_note) VALUES ('ademe_rge', ARRAY['RGE'], %s, %s) "
+            "RETURNING load_id", (Path(path).name, "ADEME open list of RGE companies (Licence Ouverte)")).fetchone()[0]
         conn.execute("CREATE TEMP TABLE tmp_rge (siret CHAR(14), label TEXT, valid_from DATE, valid_to DATE) ON COMMIT DROP")
         with conn.cursor().copy("COPY tmp_rge (siret,label,valid_from,valid_to) FROM STDIN") as cp:
             for r in rows:
@@ -86,14 +93,16 @@ def run(dsn: str, path: str, rejects_path: Optional[str] = None) -> dict:
                     cp.write_row((r["siret"], r["label"], r["valid_from"], r["valid_to"]))
         conn.execute("""DELETE FROM company_certifications WHERE source_id=%s AND cert_type='RGE'
                         AND establishment_id IN (SELECT a.establishment_id FROM company_addresses a JOIN tmp_rge t ON t.siret=a.siret)""", (src,))
-        cur = conn.execute("""INSERT INTO company_certifications(company_id, establishment_id, cert_type, cert_label, valid_from, valid_to, source_id)
-                              SELECT a.company_id, a.establishment_id, 'RGE', t.label, t.valid_from, t.valid_to, %s
-                              FROM tmp_rge t JOIN company_addresses a ON a.siret = t.siret""", (src,))
+        cur = conn.execute("""INSERT INTO company_certifications(company_id, establishment_id, cert_type, cert_label, valid_from, valid_to, source_id, load_id)
+                              SELECT a.company_id, a.establishment_id, 'RGE', t.label, t.valid_from, t.valid_to, %s, %s
+                              FROM tmp_rge t JOIN company_addresses a ON a.siret = t.siret""", (src, load_id))
         stats["matched_rows"] = cur.rowcount
         stats["establishments"] = conn.execute(
             "SELECT count(DISTINCT a.establishment_id) FROM tmp_rge t JOIN company_addresses a ON a.siret=t.siret").fetchone()[0]
         unmatched = {s for (s,) in conn.execute(
             "SELECT DISTINCT t.siret FROM tmp_rge t LEFT JOIN company_addresses a ON a.siret=t.siret WHERE a.siret IS NULL")}
+        conn.execute("UPDATE certification_loads SET rows_read=%s, rows_added=%s WHERE load_id=%s",
+                     (len(rows), stats["matched_rows"], load_id))
         conn.commit()
     bad = [r for r in rows if not r["siret"] or r["siret"] in unmatched]
     stats["rejected"] = len(bad)
