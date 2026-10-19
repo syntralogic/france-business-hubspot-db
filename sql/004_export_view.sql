@@ -70,7 +70,9 @@ LEFT JOIN LATERAL (
   ORDER BY k.is_primary DESC LIMIT 1) li ON TRUE
 LEFT JOIN LATERAL (
   SELECT f.revenue_eur, f.fiscal_year, f.employees FROM company_financials f
-  WHERE f.company_id = c.company_id AND f.revenue_eur IS NOT NULL ORDER BY f.fiscal_year DESC LIMIT 1) fin ON TRUE
+  WHERE f.company_id = c.company_id AND f.revenue_eur IS NOT NULL
+    AND (f.duration_months IS NULL OR f.duration_months = 12)   -- a 6 or 18 month exercise is not an annual revenue
+  ORDER BY COALESCE(f.period_end, make_date(f.fiscal_year, 12, 31)) DESC LIMIT 1) fin ON TRUE
 LEFT JOIN LATERAL (
   SELECT string_agg(DISTINCT x.cert_type, '; ' ORDER BY x.cert_type) AS certifications FROM company_certifications x
   WHERE x.company_id = c.company_id AND (x.valid_to IS NULL OR x.valid_to >= current_date)) certs ON TRUE

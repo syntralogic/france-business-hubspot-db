@@ -1,15 +1,21 @@
 """Pappers financials (revenue, headcount) by SIREN. PAID: needs a Pappers API plan and key.
 
 API (Pappers v2): GET https://api.pappers.fr/v2/entreprise?api_token=KEY&siren=NNNNNNNNN, JSON with a `finances` list
-(annee, chiffre_affaires, resultat, effectif). Pappers sells credits (subscription or pay-as-you-go) and the API stops
+(annee, date_cloture_exercice, duree_exercice, chiffre_affaires, resultat, effectif). Pappers sells credits (subscription or pay-as-you-go) and the API stops
 when they run out. NOT verified against a live key from the build sandbox (blocked): field names are tolerant, the credit
 cost per call is configurable (PAPPERS_CREDITS_PER_CALL, default 1: check the plan, some options cost more), and the
 first run must be `--limit 5` with the log read. Confirm in the contract that storing results in a CRM is allowed.
 
 Spend control: every call goes through fbdb.common.usage.reserve() with a hard DAILY credit cap (PAPPERS_DAILY_CAP,
 default 200 credits). When the cap is reached the run stops cleanly and the rest waits for the next day.
+Per EXERCISE (spec section 4): each row keeps its closing date and length in months when Pappers gives them; a 6 or 18 month
+exercise is stored as such and never presented as an annual revenue (the HubSpot view only uses 12-month or unknown-length
+exercises). A figure that differs from the one already stored goes to field_conflicts (`financials:<year>:<field>`), the first
+value is kept. Search status per company (financials_checks): found / not_found (provider has no accounts: NOT "no revenue")
+/ inaccessible (call failed, retried next run); no row = not searched. Field names date_cloture_exercice / duree_exercice are
+from the Pappers documentation and NOT verified live.
 Selection: active, diffusible companies that are not sole proprietors (they are the ones that file public accounts), never
-checked first, then oldest check; re-checked every 180 days (accounts change once a year). Only years with a revenue or
+checked first, then oldest check; re-checked every 180 days (accounts change once a year). Only exercises with a revenue, a result or a
 headcount are stored (company_financials, latest 3 years); nothing is invented for companies that publish no accounts.
 
 Usage: python -m fbdb.enrich.pappers [--limit 200] [--refresh-days 180]
@@ -20,6 +26,8 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import re
+from datetime import date
 from typing import Optional
 
 import httpx
@@ -27,6 +35,7 @@ import psycopg
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from fbdb.common import usage
+from fbdb.common.provenance import record_conflict
 
 log = logging.getLogger("fbdb.pappers")
 BASE = os.environ.get("PAPPERS_BASE", "https://api.pappers.fr/v2/entreprise")
@@ -51,20 +60,46 @@ def _num(v) -> Optional[float]:
         return None
 
 
+def _date(v) -> Optional[date]:
+    """ISO (2023-12-31) or French (31/12/2023) date; None when absent or unreadable (never guessed)."""
+    if not v:
+        return None
+    t = str(v).strip()[:10]
+    m = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", t) or None
+    try:
+        if m:
+            return date(int(m[1]), int(m[2]), int(m[3]))
+        m = re.fullmatch(r"(\d{2})/(\d{2})/(\d{4})", t)
+        return date(int(m[3]), int(m[2]), int(m[1])) if m else None
+    except ValueError:
+        return None
+
+
+def _months(v) -> Optional[int]:
+    n = _num(v)
+    return int(n) if n is not None and 1 <= n <= 36 and n == int(n) else None
+
+
 def parse_finances(payload: dict, keep: int = 3) -> list[dict]:
-    """[{year, revenue, net_result, employees}] newest first, only rows with revenue or employees."""
-    rows = []
+    """[{year, period_end, duration_months, revenue, net_result, employees}] newest first.
+
+    One row per exercise; only rows with a revenue, a result or a headcount. The same (year, closing date) twice keeps the first."""
+    rows, seen = [], set()
     for f in payload.get("finances") or []:
         try:
             year = int(f.get("annee"))
         except (TypeError, ValueError):
             continue
-        rev, res = _num(f.get("chiffre_affaires")), _num(f.get("resultat"))
-        emp = _num(f.get("effectif"))
-        if rev is None and emp is None:
+        rev, res, emp = _num(f.get("chiffre_affaires")), _num(f.get("resultat")), _num(f.get("effectif"))
+        if rev is None and res is None and emp is None:
             continue
-        rows.append({"year": year, "revenue": rev, "net_result": res, "employees": int(emp) if emp is not None else None})
-    rows.sort(key=lambda r: -r["year"])
+        end = _date(f.get("date_cloture_exercice"))
+        if (year, end) in seen:
+            continue
+        seen.add((year, end))
+        rows.append({"year": year, "period_end": end, "duration_months": _months(f.get("duree_exercice")),
+                     "revenue": rev, "net_result": res, "employees": int(emp) if emp is not None else None})
+    rows.sort(key=lambda r: (r["period_end"] or date(r["year"], 12, 31)), reverse=True)
     return rows[:keep]
 
 
@@ -96,23 +131,56 @@ LIMIT %(limit)s
 """
 
 
-def store(cur, company_id: int, rows: list[dict], source_id: int) -> int:
+FIELDS = (("revenue", "revenue_eur"), ("net_result", "net_result_eur"), ("employees", "employees"))
+
+
+def store(conn, company_id: int, rows: list[dict], source_id: int, source_url: Optional[str] = None) -> dict:
+    """Inserts new exercises; an exercise already stored keeps its values, a different figure goes to field_conflicts and
+    a figure we did not have yet is filled in. Returns {"stored", "conflicts"}."""
+    stored = conflicts = 0
     for r in rows:
-        cur.execute(
-            """INSERT INTO company_financials (company_id, fiscal_year, revenue_eur, net_result_eur, employees, source_id)
-               VALUES (%s,%s,%s,%s,%s,%s)
-               ON CONFLICT (company_id, fiscal_year, source_id) DO UPDATE SET revenue_eur=EXCLUDED.revenue_eur,
-                 net_result_eur=EXCLUDED.net_result_eur, employees=EXCLUDED.employees, collected_at=now()""",
-            (company_id, r["year"], r["revenue"], r["net_result"], r["employees"], source_id))
-    cur.execute("UPDATE companies SET financials_checked_at=now() WHERE company_id=%s", (company_id,))
-    return len(rows)
+        cur = conn.execute(
+            """SELECT financial_id, revenue_eur, net_result_eur, employees FROM company_financials
+               WHERE company_id=%s AND source_id=%s AND fiscal_year=%s AND period_end IS NOT DISTINCT FROM %s""",
+            (company_id, source_id, r["year"], r["period_end"])).fetchone()
+        if cur is None:
+            conn.execute(
+                """INSERT INTO company_financials (company_id, fiscal_year, period_end, duration_months, revenue_eur,
+                     net_result_eur, employees, source_id, source_url) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                (company_id, r["year"], r["period_end"], r["duration_months"], r["revenue"], r["net_result"],
+                 r["employees"], source_id, source_url))
+            stored += 1
+            continue
+        fid, have = cur[0], dict(zip(("revenue", "net_result", "employees"), cur[1:]))
+        for key, col in FIELDS:
+            new, old = r[key], have[key]
+            if new is None:
+                continue
+            if old is None:
+                conn.execute(f"UPDATE company_financials SET {col}=%s WHERE financial_id=%s", (new, fid))
+            elif float(old) != float(new):
+                label = r["period_end"].isoformat() if r["period_end"] else str(r["year"])
+                fmt = (lambda v: str(int(v))) if col == "employees" else (lambda v: f"{float(v):.2f}")
+                record_conflict(conn, company_id, f"financials:{label}:{col}", fmt(old), source_id, fmt(new), source_id)
+                conflicts += 1
+        conn.execute("UPDATE company_financials SET collected_at=now(), duration_months=COALESCE(duration_months, %s) "
+                     "WHERE financial_id=%s", (r["duration_months"], fid))
+    return {"stored": stored, "conflicts": conflicts}
+
+
+def set_status(conn, company_id: int, status: str, detail: str, source_id: int, exercises: int = 0) -> None:
+    conn.execute(
+        """INSERT INTO financials_checks (company_id, status, detail, exercises_found, source_id) VALUES (%s,%s,%s,%s,%s)
+           ON CONFLICT (company_id) DO UPDATE SET status=EXCLUDED.status, detail=EXCLUDED.detail,
+             exercises_found=EXCLUDED.exercises_found, source_id=EXCLUDED.source_id, checked_at=now()""",
+        (company_id, status, detail, exercises, source_id))
 
 
 def run(dsn: str, client=None, limit: int = 200, refresh_days: int = 180, cap: int = DAILY_CAP,
         credits_per_call: int = CREDITS_PER_CALL) -> dict:
     client = client or PappersClient()
     stats = {"read": 0, "with_financials": 0, "no_accounts": 0, "not_found": 0, "errors": 0,
-             "credits_used": 0, "cap_reached": False, "stopped_no_credits": False}
+             "credits_used": 0, "conflicts": 0, "cap_reached": False, "stopped_no_credits": False}
     with psycopg.connect(dsn) as conn:
         source_id = conn.execute("SELECT source_id FROM data_sources WHERE code='pappers'").fetchone()[0]
         due = conn.execute(SELECT_DUE, {"days": refresh_days, "limit": limit}).fetchall()
@@ -135,6 +203,8 @@ def run(dsn: str, client=None, limit: int = 200, refresh_days: int = 180, cap: i
                 usage.release(conn, PROVIDER, credits_per_call)  # failed before a charge: give the credit back
                 stats["errors"] += 1
                 consecutive += 1
+                set_status(conn, company_id, "inaccessible", str(exc)[:200], source_id)
+                conn.commit()
                 log.warning("Pappers lookup failed for %s: %s", siren, exc)
                 if consecutive >= MAX_CONSECUTIVE_ERRORS:
                     log.error("%d consecutive failures, aborting", consecutive)
@@ -144,10 +214,16 @@ def run(dsn: str, client=None, limit: int = 200, refresh_days: int = 180, cap: i
             if payload is None:
                 stats["not_found"] += 1
                 conn.execute("UPDATE companies SET financials_checked_at=now() WHERE company_id=%s", (company_id,))
+                set_status(conn, company_id, "not_found", "company unknown to the provider", source_id)
             else:
                 rows = parse_finances(payload)
-                with conn.cursor() as cur:
-                    store(cur, company_id, rows, source_id)
+                res = store(conn, company_id, rows, source_id, f"{BASE}?siren={siren}")
+                conn.execute("UPDATE companies SET financials_checked_at=now() WHERE company_id=%s", (company_id,))
+                stats["conflicts"] += res["conflicts"]
+                if rows:
+                    set_status(conn, company_id, "found", "", source_id, len(rows))
+                else:
+                    set_status(conn, company_id, "not_found", "no accounts in the provider data (not proof of none)", source_id)
                 stats["with_financials" if rows else "no_accounts"] += 1
             conn.commit()
     return stats
