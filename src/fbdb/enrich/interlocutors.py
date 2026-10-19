@@ -139,8 +139,9 @@ def link_contact(cur, company_id: int, interlocutor_id: int, ctype: str, value: 
         raise ValueError(f"{parsed[1]} is already linked to another person (interlocutor {current_person}): resolve by hand")
     rank = {None: 0, **{e: i + 1 for i, e in enumerate(EVIDENCE)}}
     level = evidence if rank[evidence] >= rank[current_level] else current_level
-    cur.execute("UPDATE company_contacts SET interlocutor_id = %s, attribution_level = %s, contact_use = coalesce(%s, contact_use) "
-                "WHERE contact_id = %s", (interlocutor_id, level, use, contact_id))
+    cur.execute("UPDATE company_contacts SET interlocutor_id = %s, attribution_level = %s, contact_use = coalesce(%s, contact_use), "
+                "contact_use_basis = CASE WHEN %s::text IS NOT NULL THEN 'manual' ELSE contact_use_basis END "
+                "WHERE contact_id = %s", (interlocutor_id, level, use, use, contact_id))
     return contact_id
 
 

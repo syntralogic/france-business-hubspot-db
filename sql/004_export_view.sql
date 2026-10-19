@@ -37,7 +37,9 @@ SELECT
   rv.rating AS google_rating, rv.review_count AS google_reviews, rv.profile_url AS google_url,
   -- not exported to the CSV: SMS opposition is separate from calls, so downstream SMS tools must check this flag
   (ph.value_normalized IS NOT NULL AND NOT EXISTS (SELECT 1 FROM contact_oppositions o WHERE o.contact_type = 'phone'
-     AND o.value_normalized = ph.value_normalized AND o.channel = 'sms')) AS phone_sms_allowed
+     AND o.value_normalized = ph.value_normalized AND o.channel = 'sms')) AS phone_sms_allowed,
+  -- not exported to the CSV: function of the exported mailbox and whether it is an eligible (priority) one
+  em.contact_use AS email_use, em.eligible AS email_is_priority
 FROM company_addresses a
 JOIN companies c ON c.company_id = a.company_id
 LEFT JOIN data_sources src ON src.source_id = c.primary_source_id
@@ -53,12 +55,17 @@ LEFT JOIN LATERAL (
     AND NOT EXISTS (SELECT 1 FROM contact_oppositions o WHERE o.contact_type = 'phone' AND o.value_normalized = k.value_normalized AND o.channel = 'call')   -- the exported phone is for calls
   ORDER BY (k.establishment_id IS NOT NULL) DESC, k.is_primary DESC, k.last_verified_at DESC NULLS LAST LIMIT 1) ph ON TRUE
 LEFT JOIN LATERAL (
-  SELECT k.value_normalized, k.value_status, s.code AS source_code FROM company_contacts k
+  SELECT k.value_normalized, k.value_status, k.contact_use, COALESCE(r.eligible, FALSE) AS eligible, s.code AS source_code
+  FROM company_contacts k
   LEFT JOIN data_sources s ON s.source_id = k.source_id
+  LEFT JOIN email_priority_rules r ON r.contact_use = COALESCE(k.contact_use, 'unknown')   -- sql/003d: mailbox function preference
   WHERE k.company_id = c.company_id AND (k.establishment_id = a.establishment_id OR k.establishment_id IS NULL)
     AND k.contact_type = 'email' AND k.value_status IN ('verified','sourced') AND k.opposed_at IS NULL   -- never 'inferred'
     AND NOT EXISTS (SELECT 1 FROM contact_oppositions o WHERE o.contact_type = 'email' AND o.value_normalized = k.value_normalized AND o.channel = 'email')
-  ORDER BY (k.establishment_id IS NOT NULL) DESC, k.is_primary DESC, k.last_verified_at DESC NULLS LAST LIMIT 1) em ON TRUE
+  -- an email of this establishment still comes first; then the preferred mailbox function (direction > devis > contact ...), a function the
+  -- client ruled out (accounting, recruitment...) is kept only when nothing better exists; then verified, primary, most recently verified
+  ORDER BY (k.establishment_id IS NOT NULL) DESC, COALESCE(r.eligible, FALSE) DESC, COALESCE(r.priority_rank, 99),
+           (k.value_status = 'verified') DESC, k.is_primary DESC, k.last_verified_at DESC NULLS LAST, k.contact_id LIMIT 1) em ON TRUE
 LEFT JOIN LATERAL (
   SELECT k.value FROM company_contacts k
   WHERE k.company_id = c.company_id AND (k.establishment_id = a.establishment_id OR k.establishment_id IS NULL)

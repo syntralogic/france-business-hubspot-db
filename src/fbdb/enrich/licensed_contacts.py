@@ -35,6 +35,7 @@ from typing import Optional
 import psycopg
 
 from fbdb.common.provenance import record_conflict
+from fbdb.enrich.site_extract import email_use
 from fbdb.match.resolve import contact_conflict
 from fbdb.transform.normalize import (
     is_valid_siren, is_valid_siret, normalize_domain, normalize_email, normalize_phone_fr,
@@ -161,10 +162,12 @@ def store_contact(cur, company_id, establishment_id, ctype, raw, norm, status, s
         other = cur.fetchone()
         if other:
             record_conflict(cur, company_id, "website", other[0], other[1], norm, source_id, establishment_id)
+    # function of the mailbox, read from the address only (devis@, sav@ ...); None when the address does not say
+    use = email_use(norm) if ctype == "email" else None
     cur.execute(
         "INSERT INTO company_contacts (company_id, establishment_id, contact_type, value, value_normalized, is_primary, "
-        "value_status, source_id, last_verified_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s, now())",
-        (company_id, establishment_id, ctype, raw, norm, not has_primary, status, source_id))
+        "value_status, source_id, contact_use, contact_use_basis, last_verified_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, now())",
+        (company_id, establishment_id, ctype, raw, norm, not has_primary, status, source_id, use, "address_name" if use else None))
     cur.execute(
         "INSERT INTO company_change_history (company_id, table_name, field_name, old_value, new_value, change_type, "
         "source_id, batch_id) VALUES (%s, 'company_contacts', %s, NULL, %s, 'insert', %s, %s)",

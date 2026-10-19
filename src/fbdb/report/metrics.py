@@ -163,6 +163,13 @@ def collect(dsn: str, threshold_note: float = 0.6, target_rows: int = 500_000) -
               AND NOT EXISTS (SELECT 1 FROM company_press x WHERE x.company_id=c.company_id AND x.status='confirmed')""")[0]
         rates["match_companies_with_press"] = div(press_ok, comp)
         rates["match_companies_with_press_to_verify"] = div(press_tv, comp)
+        # priority email (sql/003d, email_priority_rules): at least one usable email whose mailbox function is eligible. No row = "no priority email", not "no email"
+        prio = one("""SELECT count(*) FROM v_priority_email""")[0]
+        rates["match_companies_with_priority_email"] = div(prio, comp)
+        # emails whose mailbox function is known (read from the address, the page, or set by a person) among all usable emails
+        use_known, use_total = one("""SELECT count(*) FILTER (WHERE contact_use IS NOT NULL), count(*) FROM company_contacts
+              WHERE contact_type='email' AND value_status IN ('verified','sourced')""")
+        rates["match_emails_with_known_function"] = div(use_known, use_total)
         rates["match_directors_with_mobile_linked"] = div(d_mobile, dirs)          # mobile attached to the person (with evidence), not just the company
         rates["match_directors_with_verified_email_linked"] = div(d_email, dirs)   # deliverable per verifier + attached to the person
         rates["match_directors_with_any_email_linked"] = div(d_email_any, dirs)    # includes provider hypotheses ('inferred')

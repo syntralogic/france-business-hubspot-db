@@ -4,8 +4,8 @@ Used by fbdb.enrich.website once the site is tied to the company by its SIREN. N
 what the page publishes, keeps the line it came from as the proof, and attaches a phone/email to a person ONLY when both
 sit on the same line, or the contact sits on the line right after the person.
 
-  extract_phones(markdown, links)  -> [{"value", "normalized", "use", "context"}]
-  extract_emails(markdown, links)  -> [{"value", "normalized", "use", "context"}]
+  extract_phones(markdown, links)  -> [{"value", "normalized", "use", "use_basis", "context"}]
+  extract_emails(markdown, links)  -> [{"value", "normalized", "use", "use_basis", "context"}]   # use_basis: address_name | page_context | None
   extract_people(markdown)         -> [{"first_name", "last_name", "function", "line", "phones", "emails", "rule"}]
   contact_pages(base_url, links)   -> same-site contact / team pages worth one more scrape
 
@@ -37,12 +37,13 @@ _USE_WORDS = [
     ("direction", ("direction", "gerant", "gerance", "dirigeant", "president", "pdg")),
     ("switchboard", ("standard", "accueil", "secretariat")),
 ]
-_EMAIL_USE_BY_LOCAL = [("direction", ("direction", "gerant", "gerance", "dirigeant", "pdg")),
-                       ("sales", ("devis", "commercial", "vente", "ventes")),
+_EMAIL_USE_BY_LOCAL = [("direction", ("direction", "gerant", "gerance", "dirigeant", "pdg", "president")),
+                       ("sales", ("devis", "commercial", "vente", "ventes", "commerciale")),
                        ("accounting", ("compta", "comptabilite", "facturation")),
-                       ("after_sales", ("sav", "service-client", "serviceclient")),
+                       ("after_sales", ("sav", "service-client", "serviceclient", "support", "assistance")),
+                       ("emergency", ("urgence", "urgences", "depannage", "astreinte")),
                        ("recruitment", ("recrutement", "rh", "emploi", "jobs", "candidature")),
-                       ("general", ("contact", "info", "infos", "accueil", "hello", "bonjour", "mail", "secretariat"))]
+                       ("general", ("contact", "info", "infos", "accueil", "hello", "bonjour", "mail", "secretariat", "administration"))]
 
 
 def _fold(text: str) -> str:
@@ -71,13 +72,15 @@ def extract_phones(markdown: str, links: list[str] | None = None) -> list[dict]:
         norm = normalize_phone_fr(m.group(0))
         if norm and norm not in out:
             line = _line_of(text, m.start(), m.end())
-            out[norm] = {"value": m.group(0).strip(), "normalized": norm, "use": _use_from_context(line), "context": line[:200]}
+            use = _use_from_context(line)
+            out[norm] = {"value": m.group(0).strip(), "normalized": norm, "use": use, "context": line[:200],
+                         "use_basis": "page_context" if use else None}
     for link in links or []:
         if link.lower().startswith("tel:"):
             raw = link[4:].split("?")[0].replace("%20", " ")
             norm = normalize_phone_fr(raw)
             if norm and norm not in out:
-                out[norm] = {"value": raw, "normalized": norm, "use": None, "context": link[:200]}
+                out[norm] = {"value": raw, "normalized": norm, "use": None, "context": link[:200], "use_basis": None}
     return list(out.values())
 
 
@@ -105,7 +108,11 @@ def extract_emails(markdown: str, links: list[str] | None = None) -> list[dict]:
     for raw, line in candidates:
         norm = normalize_email(raw)
         if norm and _email_ok(norm) and norm not in out:
-            out[norm] = {"value": raw, "normalized": norm, "use": email_use(norm) or _use_from_context(line), "context": line[:200]}
+            by_address = email_use(norm)
+            use = by_address or _use_from_context(line)
+            # how the function was decided (contact_use_basis): the address itself, or the words around it on the page
+            out[norm] = {"value": raw, "normalized": norm, "use": use, "context": line[:200],
+                         "use_basis": None if not use else ("address_name" if by_address else "page_context")}
     return list(out.values())
 
 

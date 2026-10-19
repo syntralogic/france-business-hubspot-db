@@ -278,9 +278,10 @@ def _put_contact(cur, company_id: int, ctype: str, item: dict, source_id: int, s
     proof = f"{ctype} written on {item['url']}: {item['context'][:120]} | {site_proof}"
     cur.execute(
         """INSERT INTO company_contacts (company_id, contact_type, value, value_normalized, is_primary, value_status, source_id,
-                 match_proof, match_url, contact_use, last_verified_at)
-           VALUES (%s,%s,%s,%s,%s,'sourced',%s,%s,%s,%s, now()) RETURNING contact_id""",
-        (company_id, ctype, item["value"], item["normalized"], not has_primary, source_id, proof, item["url"], item.get("use")))
+                 match_proof, match_url, contact_use, contact_use_basis, last_verified_at)
+           VALUES (%s,%s,%s,%s,%s,'sourced',%s,%s,%s,%s,%s, now()) RETURNING contact_id""",
+        (company_id, ctype, item["value"], item["normalized"], not has_primary, source_id, proof, item["url"], item.get("use"),
+         item.get("use_basis") if item.get("use") else None))
     return cur.fetchone()[0], True
 
 

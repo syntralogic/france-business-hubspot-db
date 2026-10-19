@@ -113,3 +113,20 @@ def test_a_rejected_pair_does_not_hide_the_name_that_follows_it():
 def test_function_text_never_contains_the_persons_own_name_or_a_trailing_preposition():
     assert x._tidy_function("Directeur Marc Leroy chez", "Marc", "Leroy") == "Directeur"
     assert x._tidy_function("Responsable commercial de", "", "") == "Responsable commercial"
+
+
+def test_mailbox_function_from_the_address_and_how_it_was_decided():
+    page = "Direction : direction@a.fr\nsav@a.fr\nurgence@a.fr\nsupport@a.fr\nadministration@a.fr\nrhone@a.fr\njean.dupont@a.fr\nÉcrire : jean.dupont@a.fr"
+    got = {e["normalized"]: (e["use"], e["use_basis"]) for e in x.extract_emails(page)}
+    assert got["direction@a.fr"] == ("direction", "address_name")
+    assert got["sav@a.fr"] == ("after_sales", "address_name") and got["support@a.fr"] == ("after_sales", "address_name")
+    assert got["urgence@a.fr"] == ("emergency", "address_name") and got["administration@a.fr"] == ("general", "address_name")
+    assert got["rhone@a.fr"][0] is None                      # 'rh' is a word, not a prefix of a surname or a place
+    assert got["jean.dupont@a.fr"] == (None, None)           # a named mailbox is never assumed to be someone's function
+
+
+def test_function_read_from_the_words_around_the_value_has_its_own_basis():
+    e = x.extract_emails("Pour un devis : jean.dupont@a.fr")[0]
+    assert (e["use"], e["use_basis"]) == ("sales", "page_context")
+    p = x.extract_phones("Standard : 04 72 00 00 00\nTel : 04 72 00 00 01")
+    assert [(i["use"], i["use_basis"]) for i in p] == [("switchboard", "page_context"), (None, None)]

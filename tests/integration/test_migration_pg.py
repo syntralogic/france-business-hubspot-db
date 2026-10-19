@@ -22,7 +22,7 @@ def _columns(conn):
 def test_006_upgrades_an_old_database_and_is_idempotent():
     with psycopg.connect(DSN, autocommit=True) as conn:
         conn.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
-        for f in ("000_reference_data.sql", "001_schema.sql", "002_staging.sql", "003_pipeline_state.sql", "003a_provenance.sql", "003b_financials_exercice.sql", "003c_address_diffusion.sql",
+        for f in ("000_reference_data.sql", "001_schema.sql", "002_staging.sql", "003_pipeline_state.sql", "003a_provenance.sql", "003b_financials_exercice.sql", "003c_address_diffusion.sql", "003d_email_priority.sql",
                   "004_export_view.sql"):
             conn.execute((SQL_DIR / f).read_text(encoding="utf-8"))
         # simulate the pre-006 layout (the view does not read these columns, so they can be dropped)
