@@ -34,3 +34,50 @@ def test_geocode_run_verified_and_flagged(db):
         assert st["verified"] == verified and st["flagged"] == 1 - verified
     with psycopg.connect(DSN) as c:
         assert c.execute("SELECT count(*) FROM data_quality_issues WHERE issue_code='LOW_GEOCODE_SCORE'").fetchone()[0] == 1
+
+
+def _addr(c):
+    return c.execute("SELECT latitude::float, standardized_address, address_status, geocode_score::float, geocode_precision, "
+                     "geocoded_at IS NULL FROM company_addresses").fetchone()
+
+
+def _geocode_ok(score="0.97", rtype="housenumber"):
+    out = ("id,street,postcode,city,latitude,longitude,result_label,result_score,result_status,result_type\n"
+           "{eid},x,75002,Paris,48.869,2.331,1 Rue de la Paix 75002 Paris," + score + ",ok," + rtype + "\n")
+    with psycopg.connect(DSN, autocommit=True) as c:
+        eid = c.execute("SELECT establishment_id FROM company_addresses").fetchone()[0]
+    return geocode.run(DSN, post=lambda _t: out.format(eid=eid))
+
+
+def test_municipality_only_match_is_flagged_not_verified_and_stores_precision(db):
+    st = _geocode_ok("0.90", "municipality")
+    assert st["verified"] == 0 and st["flagged"] == 1
+    with psycopg.connect(DSN) as c:
+        assert _addr(c) == (None, None, "unverified", 0.9, "municipality", False)
+        assert c.execute("SELECT details FROM data_quality_issues WHERE issue_code='LOW_GEOCODE_SCORE'").fetchone()[0].startswith("MUNICIPALITY_ONLY")
+
+
+def test_address_change_from_sirene_clears_the_old_coordinates_and_the_row_is_geocoded_again(db):
+    assert _geocode_ok()["verified"] == 1
+    with psycopg.connect(DSN, autocommit=True) as c:
+        assert _addr(c) == (48.869, "1 Rue de la Paix 75002 Paris", "verified", 0.97, "housenumber", False)
+        c.execute("UPDATE company_addresses SET naf = '47.11F', updated_at = now()")          # other field: untouched
+        assert _addr(c)[2] == "verified"
+        c.execute("UPDATE company_addresses SET street = '12 avenue Foch', postal_code = '75116'")    # what the SIRENE upsert does
+        assert _addr(c) == (None, None, "unverified", None, None, True)
+    st = geocode.run(DSN, post=lambda _t: "id,latitude\n")                                      # row is selected again
+    assert st["selected"] == 1
+
+
+def test_geocoder_write_of_address_and_coordinates_together_is_not_reset_and_sourced_rows_keep_status(db):
+    with psycopg.connect(DSN, autocommit=True) as c:
+        c.execute("UPDATE company_addresses SET street='2 rue X', latitude=48.1, longitude=2.1, address_status='sourced'")
+        assert c.execute("SELECT latitude::float, address_status FROM company_addresses").fetchone() == (48.1, "sourced")
+        c.execute("UPDATE company_addresses SET street='3 rue Y'")             # not geocoded by us: nothing to invalidate
+        assert c.execute("SELECT latitude::float, address_status FROM company_addresses").fetchone() == (48.1, "sourced")
+
+
+def test_007_is_idempotent(db):
+    with psycopg.connect(DSN, autocommit=True) as c:
+        for _ in range(2):
+            c.execute((SQL_DIR / "007_geocoding.sql").read_text(encoding="utf-8"))

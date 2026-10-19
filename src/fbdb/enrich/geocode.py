@@ -6,6 +6,10 @@ The old api-adresse.data.gouv.fr was decommissioned end of January 2026; the Geo
 
 Rule: result_score >= threshold (default 0.6) -> coordinates + standardized address saved, address_status='verified'.
 Below threshold or not found -> nothing is overwritten, a `LOW_GEOCODE_SCORE` row is added to data_quality_issues.
+A match that only found the TOWN (result_type "municipality": the coordinates are the town centre, not the establishment) is not
+"verified" either: same flag (reason MUNICIPALITY_ONLY). The precision (result_type) is stored in geocode_precision; when the
+service does not return it the old rule applies. result_type is from the BAN CSV documentation, NOT verified live.
+When SIRENE later changes the address, a trigger (sql/007) clears the old coordinates and the row is geocoded again.
 Usage: python -m fbdb.enrich.geocode [--limit 50000] [--threshold 0.6] [--chunk 5000]
 Needs: sql/007_geocoding.sql, DATABASE_URL.
 """
@@ -54,10 +58,12 @@ def parse_result(text: str, threshold: float = THRESHOLD) -> list[dict]:
         except (KeyError, TypeError, ValueError):
             lat = lon = None
             found = False
-        ok = found and score >= threshold
-        reason = "" if ok else ("NOT_FOUND" if not found else "LOW_SCORE")
+        precision = (r.get("result_type") or "").strip().lower() or None
+        ok = found and score >= threshold and precision != "municipality"
+        reason = "" if ok else ("NOT_FOUND" if not found else ("LOW_SCORE" if score < threshold else "MUNICIPALITY_ONLY"))
         out.append({"id": int(r["id"]), "ok": ok, "lat": lat if found else None, "lon": lon if found else None,
-                    "score": score, "label": (r.get("result_label") or "").strip(), "reason": reason})
+                    "score": score, "label": (r.get("result_label") or "").strip(), "reason": reason,
+                    "precision": precision if found else None})
     return out
 
 
@@ -73,7 +79,7 @@ def geocode_csv(csv_text: str, client: Optional[httpx.Client] = None) -> str:
                                data=[("columns", "street"), ("columns", "postcode"), ("columns", "city"),
                                      ("result_columns", "result_label"), ("result_columns", "result_score"),
                                      ("result_columns", "result_status"), ("result_columns", "latitude"),
-                                     ("result_columns", "longitude")])
+                                     ("result_columns", "longitude"), ("result_columns", "result_type")])
         except httpx.TransportError as e:
             raise RetryableError(str(e)) from e
         if resp.status_code == 429 or resp.status_code >= 500:
@@ -113,12 +119,13 @@ def run(dsn: str, limit: int = 50000, threshold: float = THRESHOLD, chunk: int =
                 if res["ok"]:
                     conn.execute(
                         """UPDATE company_addresses SET latitude=%s, longitude=%s, standardized_address=%s,
-                           address_status='verified', geocode_score=%s, geocoded_at=now() WHERE establishment_id=%s""",
-                        (res["lat"], res["lon"], res["label"] or None, res["score"], eid))
+                           address_status='verified', geocode_score=%s, geocode_precision=%s, geocoded_at=now()
+                           WHERE establishment_id=%s""",
+                        (res["lat"], res["lon"], res["label"] or None, res["score"], res["precision"], eid))
                     stats["verified"] += 1
                 else:
-                    conn.execute("UPDATE company_addresses SET geocode_score=%s, geocoded_at=now() WHERE establishment_id=%s",
-                                 (res["score"], eid))
+                    conn.execute("UPDATE company_addresses SET geocode_score=%s, geocode_precision=%s, geocoded_at=now() "
+                                 "WHERE establishment_id=%s", (res["score"], res["precision"], eid))
                     conn.execute(
                         """INSERT INTO data_quality_issues(company_id, establishment_id, issue_code, severity, field_name, details)
                            VALUES (%s,%s,'LOW_GEOCODE_SCORE','warning','address',%s)""",
