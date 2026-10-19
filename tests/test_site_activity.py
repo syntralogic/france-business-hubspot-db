@@ -148,3 +148,23 @@ def test_at_most_four_pages_per_site():
     c = Fake(pages)
     sa.read_site(c, URL)
     assert len(c.scrapes) == sa.MAX_PAGES == 4
+
+
+def test_building_types_and_commitments_are_claims_with_their_passage():
+    md = ("Nous intervenons dans des maisons individuelles, des copropriétés et des bureaux.\n"
+          "Devis gratuit sous 48h. Garantie décennale sur tous nos travaux.\n"
+          "Notre équipe vous accompagne de A à Z. Spécialisés en bornes de recharge.\n")
+    got = {(i["facet"], i["code"]): i for i in r.extract_activities(md, "https://x.fr/")}
+    for key in [("building_type", "maison_individuelle"), ("building_type", "immeuble_collectif"), ("building_type", "bureaux"),
+                ("commitment", "delai"), ("commitment", "devis_gratuit"), ("commitment", "garantie"),
+                ("commitment", "accompagnement"), ("commitment", "specialisation")]:
+        assert key in got, key
+    assert "Garantie décennale" in got[("commitment", "garantie")]["passage"]
+    assert got[("building_type", "bureaux")]["url"] == "https://x.fr/"
+
+
+def test_building_type_and_commitment_ignore_negation_hiring_and_photos():
+    md = ("Nous ne travaillons pas sur les commerces.\n"
+          "Recrutement : nous cherchons un électricien pour nos magasins, devis gratuit pour les candidats.\n"
+          "![chantier dans une usine avec garantie](photo.jpg)\n")
+    assert [i for i in r.extract_activities(md, "u") if i["facet"] in ("building_type", "commitment")] == []

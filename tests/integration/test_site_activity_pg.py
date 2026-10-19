@@ -126,9 +126,13 @@ def test_database_constraints_and_idempotent_migration(db):
                          "VALUES (%s,'trade','plombier','x','x','u')", (cid,))
         with pytest.raises(psycopg.errors.CheckViolation):
             conn.execute("INSERT INTO activity_runs (company_id, outcome) VALUES (%s,'no_activity')", (cid,))
-        sql = (SQL_DIR / "017_site_activity.sql").read_text(encoding="utf-8")
-        conn.execute(sql)
-        conn.execute(sql)
+        for facet in ("building_type", "commitment"):                                      # facets added by 024
+            conn.execute("INSERT INTO company_activities (company_id, facet, code, label, matched_text, passage, source_url) "
+                         "VALUES (%s,%s,'x','x','x','x','u')", (cid, facet))
+        for name in ("017_site_activity.sql", "024_activity_facets_more.sql"):
+            sql = (SQL_DIR / name).read_text(encoding="utf-8")
+            conn.execute(sql)
+            conn.execute(sql)                                                             # idempotent
 
 
 def test_activity_kpi_counts_companies_with_claims_only(db):

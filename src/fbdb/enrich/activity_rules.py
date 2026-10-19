@@ -9,7 +9,7 @@ writes, and the following are never read as a claim:
     partner or sub-contractor ("nous travaillons avec un plombier partenaire") or a training offer.
 Blog / news / legal / hiring pages are not read (see site_activity.activity_pages): an article about heat pumps is not a service.
 
-Facets: trade (metier reel), service (prestations), specialty (IRVE, clim, photovoltaique...), work_type (neuf / renovation /
+Also: building_type (kind of building / site the text says it works on) and commitment (delay, free quote, guarantee, support,\nspecialisation announced). Both are claims of the site, like every facet.\nFacets: trade (metier reel), service (prestations), specialty (IRVE, clim, photovoltaique...), work_type (neuf / renovation /
 depannage / maintenance), client_type, contract (entretien, urgence 24/7), brand (a manufacturer named on the page), approval
 (agrement / label CLAIMED on the site; an official certification stays in company_certifications).
 
@@ -81,6 +81,24 @@ RULES: list[tuple[str, str, str, str]] = [
     ("client_type", "bailleurs_sociaux", "Bailleurs sociaux", r"\bbailleurs? sociaux\b|\blogements? sociaux\b|\bhlm\b"),
     ("client_type", "promoteurs_maitrise_oeuvre", "Promoteurs / maitrise d'oeuvre",
      r"\bpromoteurs?\b|\bconstructeurs?\b|\bmaitres? d.oeuvre\b|\bmaitrise d.oeuvre\b|\barchitectes?\b|\bbureaux? d.etudes?\b"),
+    # ---- building type: what kind of building / site the text says it works on (a claim, never read from a photo)
+    ("building_type", "maison_individuelle", "Maison individuelle", r"\bmaisons? individuelles?\b|\bpavillons?\b|\bvillas?\b|\bhabitat individuel\b"),
+    ("building_type", "immeuble_collectif", "Immeuble / copropriete", r"\bimmeubles?\b|\bcoproprietes?\b|\bhabitat collectif\b|\bresidences? (collectives?|de logements)\b"),
+    ("building_type", "appartement", "Appartement", r"\bappartements?\b"),
+    ("building_type", "commerce", "Commerce / magasin", r"\bcommerces?\b|\bmagasins?\b|\bboutiques?\b|\bsurfaces? commerciales?\b"),
+    ("building_type", "bureaux", "Bureaux / locaux tertiaires", r"\bbureaux\b|\blocaux (professionnels|tertiaires|commerciaux)\b"),
+    ("building_type", "local_industriel", "Industrie / entrepot", r"\bsites? industriels?\b|\busines?\b|\bentrepots?\b|\bateliers?\b|\bbatiments? industriels?\b"),
+    ("building_type", "erp", "ERP / batiment recevant du public", r"\berp\b|\betablissements? recevant du public\b"),
+    ("building_type", "hotel_restaurant", "Hotel / restaurant", r"\bhotels?\b|\brestaurants?\b|\bcafes?-hotels?-restaurants?\b|\bchr\b"),
+    ("building_type", "agricole", "Batiment agricole", r"\bbatiments? agricoles?\b|\bexploitations? agricoles?\b|\bhangars? agricoles?\b"),
+    ("building_type", "batiment_public", "Batiment public / ecole / sante", r"\bbatiments? publics?\b|\becoles?\b|\bcollèges?\b|\bcolleges?\b|\bhopitaux\b|\bcliniques?\b|\bmairies?\b|\bsalles? des fetes\b"),
+    # ---- commitment: what the company promises (delays, free quote, guarantee, support, specialisation)
+    ("commitment", "delai", "Delai / rapidite annonces",
+     r"\bsous (24|48|72) ?(h|heures)\b|\bdans les (24|48|72) ?(h|heures)\b|\bdelais? (courts?|rapides?|respectes?|tenus?)\b|\bintervention rapide\b|\bintervenons? rapidement\b|\breactivite\b|\bsous 1 semaine\b"),
+    ("commitment", "devis_gratuit", "Devis gratuit", r"\bdevis (gratuits?|offerts?|sans engagement)\b|\bdevis gratuit\b"),
+    ("commitment", "garantie", "Garantie annoncee", r"\bgaranti(e|es|s)?\b"),
+    ("commitment", "accompagnement", "Accompagnement / suivi", r"\baccompagn(e|ons|ement|er|ent)\b|\bsuivi (de|du|des) (chantier|dossier|travaux)\b|\bconseils? personnalises?\b|\binterlocuteur unique\b"),
+    ("commitment", "specialisation", "Specialisation annoncee", r"\bspecialises? (dans|en)\b|\bspecialistes? (de|du|des|en)\b|\bnotre specialite\b|\bexpert(s|e|es)? (en|de|du|des)\b"),
     # ---- contract
     ("contract", "contrat_entretien", "Contrat d'entretien / maintenance", r"\bcontrats? (annuels? )?d.entretien\b|\bcontrats? (annuels? )?de maintenance\b|\bcontrats? annuels?\b|\bcontrats? de service\b"),
     ("contract", "astreinte_urgence", "Urgence / astreinte 24h-7j",
