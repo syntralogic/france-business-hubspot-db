@@ -143,6 +143,10 @@ def collect(dsn: str, threshold_note: float = 0.6, target_rows: int = 500_000) -
         with_claims = one("""SELECT count(*) FROM companies c WHERE c.status='active' AND c.is_diffusible
               AND EXISTS (SELECT 1 FROM company_activities a WHERE a.company_id=c.company_id)""")[0]
         rates["match_companies_with_activity_claims"] = div(with_claims, comp)
+        # public contracts found in the loaded DECP files (a company without one is "none in loaded datasets", never "never worked for the public sector")
+        with_contracts = one("""SELECT count(*) FROM companies c WHERE c.status='active' AND c.is_diffusible
+              AND EXISTS (SELECT 1 FROM public_contracts p WHERE p.company_id=c.company_id)""")[0]
+        rates["match_companies_with_public_contracts"] = div(with_contracts, comp)
         rates["match_directors_with_mobile_linked"] = div(d_mobile, dirs)          # mobile attached to the person (with evidence), not just the company
         rates["match_directors_with_verified_email_linked"] = div(d_email, dirs)   # deliverable per verifier + attached to the person
         rates["match_directors_with_any_email_linked"] = div(d_email_any, dirs)    # includes provider hypotheses ('inferred')
