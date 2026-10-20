@@ -12,6 +12,10 @@ found_valid / found_not_current / none_in_loaded_files for 'RGE'. An establishme
 rows (last_seen_at shows when ADEME last listed it): decide with the client whether a row not seen in the latest full file may
 still be exported.
 
+AUTOMATIC DOWNLOAD: `python -m fbdb.enrich.ademe_rge --download` fetches the CSV from the URL in RGE_CSV_URL (or --url) by itself, loads it and
+deletes it. ADEME publishes no official permanent CSV link that we could verify (data.ademe.fr offers an API and a manual export), so
+the URL is NOT guessed: put the export / permalink you use in RGE_CSV_URL. Without it the weekly run skips this step.
+
 Usage: python -m fbdb.enrich.ademe_rge FILE.csv [--rejects data/exports/rge_rejects.csv]
 Needs: DATABASE_URL.
 """
@@ -120,12 +124,36 @@ def run(dsn: str, path: str, rejects_path: Optional[str] = None) -> dict:
     return stats
 
 
+def download_and_run(dsn: str, url: Optional[str], work_dir: str = "data/downloads", rejects_path: Optional[str] = None, client=None) -> dict:
+    from datetime import datetime, timezone
+    from pathlib import Path
+    from fbdb.common import opendata
+    if not url:
+        raise ValueError("no URL: set RGE_CSV_URL (or pass --url); the ADEME link is not guessed")
+    dest = Path(work_dir) / f"rge-{datetime.now(timezone.utc):%Y%m%d}.csv"
+    size = opendata.download(url, dest, client)
+    try:
+        stats = run(dsn, str(dest), rejects_path)
+    finally:
+        dest.unlink(missing_ok=True)
+    stats["downloaded_bytes"] = size
+    return stats
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("file")
+    ap.add_argument("file", nargs="?")
+    ap.add_argument("--download", action="store_true", help="fetch the CSV by itself from --url / RGE_CSV_URL")
+    ap.add_argument("--url", default=os.environ.get("RGE_CSV_URL"))
+    ap.add_argument("--work-dir", default="data/downloads")
     ap.add_argument("--rejects", default="data/exports/rge_rejects.csv")
     a = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    if a.download:
+        print(download_and_run(os.environ["DATABASE_URL"], a.url, a.work_dir, a.rejects))
+        return
+    if not a.file:
+        ap.error("give FILE.csv or use --download")
     print(run(os.environ["DATABASE_URL"], a.file, a.rejects))
 
 

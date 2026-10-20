@@ -20,6 +20,12 @@ Rules:
 - "No contract" is never stored. v_public_contract_status says `found` / `none_in_loaded_datasets` / `not_checked`; the middle value
   only means "not in the files we loaded" (DECP holds what buyers published, mostly above the legal threshold, with gaps).
 
+AUTOMATIC DOWNLOAD (no file to fetch by hand): `python -m fbdb.enrich.decp --download` resolves the newest main CSV resource of the
+consolidated tabular dataset on data.gouv.fr (DECP_DATASET_ID, default 608c055b35eb4e6ee20eb325) through its API, streams it to
+data/downloads/, loads it and deletes it (--keep-file keeps it). The resource URL is the source_url (proof of every row). With
+--if-older-than-days N it does nothing when a DECP load younger than N days exists (the weekly run uses 30). CSV rows whose
+`donneesActuelles` is false (older versions of a modified market) are skipped.
+
 Usage: python -m fbdb.enrich.decp FILE --source-url https://www.data.gouv.fr/... [--label "DECP consolidated 2026-10"]
        [--coverage-note "..."] [--rejects data/exports/decp_rejects.csv] [--map titulaire_id=Titulaire_SIRET]
 Needs: DATABASE_URL.
@@ -33,7 +39,7 @@ import logging
 import os
 import re
 import unicodedata
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Iterator, Optional
@@ -58,6 +64,7 @@ CSV_ALIASES = {
     "publication_date": ["datepublicationdonnees", "date_publication_donnees"], "cpv_code": ["codecpv", "code_cpv"],
     "procedure": ["procedure"], "nature": ["nature"], "duration_months": ["dureemois", "duree_mois"],
     "place_code": ["lieuexecution_code"], "place_name": ["lieuexecution_nom"],
+    "current": ["donneesactuelles", "donnees_actuelles"],      # tabular consolidated file: false = an older version of a modified market
 }
 
 
@@ -192,6 +199,8 @@ def iter_csv_rows(path: str | Path, mapping: Optional[dict] = None) -> Iterator[
             raise ValueError(f"no titulaire identifier column found; headers: {list(cols)} (use --map holder_id=HEADER)")
         for r in rd:
             g = lambda k: _s(r.get(pick[k])) if pick[k] else None  # noqa: E731
+            if (g("current") or "").lower() in ("false", "0", "faux", "non", "f"):
+                continue            # an earlier version of a market that was modified: the current row carries the market
             place = " ".join(x for x in (g("place_code"), g("place_name")) if x) or None
             yield {"uid": g("uid"), "market_id": g("market_id"), "buyer_id": g("buyer_id"), "buyer_name": g("buyer_name"),
                    "object": g("object"), "amount": g("amount"), "notification_date": g("notification_date"),
@@ -309,10 +318,51 @@ def run(dsn: str, path: str, source_url: str, label: Optional[str] = None, cover
     return stats
 
 
+DEFAULT_DATASET = "608c055b35eb4e6ee20eb325"     # "DECP consolidees (format tabulaire)", data.gouv.fr
+
+
+def _is_due(dsn: str, days: int) -> bool:
+    with psycopg.connect(dsn) as conn:
+        row = conn.execute("SELECT max(loaded_at) < now() - make_interval(days => %s) FROM decp_loads", (days,)).fetchone()
+    return row[0] is None or bool(row[0])           # no load yet, or the newest one is old enough
+
+
+def download_and_run(dsn: str, dataset: str, fmt: str = "csv", title_contains: Optional[str] = None, label: Optional[str] = None,
+                     coverage_note: Optional[str] = None, rejects_path: Optional[str] = None, mapping: Optional[dict] = None,
+                     work_dir: str = "data/downloads", keep: bool = False, if_older_than_days: Optional[int] = None,
+                     client=None) -> dict:
+    from fbdb.common import opendata
+    if if_older_than_days is not None and not _is_due(dsn, if_older_than_days):
+        return {"skipped": f"a DECP load younger than {if_older_than_days} days exists"}
+    if fmt.lower() not in ("csv", "json"):
+        raise ValueError("only csv and json are read (parquet is not)")
+    res = opendata.dataset_resource(dataset, fmt, title_contains, client)
+    dest = Path(work_dir) / f"decp-{datetime.now(timezone.utc):%Y%m%d}.{fmt.lower()}"
+    size = opendata.download(res["url"], dest, client)
+    try:
+        stats = run(dsn, str(dest), res["url"],
+                    label or f"DECP consolidated {(res['last_modified'] or '')[:10]} ({res['dataset_title']})".replace(" ()", ""),
+                    coverage_note or (f"data.gouv.fr dataset {res['dataset_page']}, resource '{res['title']}' modified {res['last_modified']}, "
+                                      f"{size} bytes. DECP holds what buyers published: a company absent from it has NOT necessarily never worked for the public."),
+                    rejects_path, mapping)
+    finally:
+        if not keep:
+            dest.unlink(missing_ok=True)
+    stats["downloaded_bytes"] = size
+    return stats
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("file")
-    ap.add_argument("--source-url", required=True, help="dataset / resource URL the file comes from (the proof of every row)")
+    ap.add_argument("file", nargs="?", help="a DECP file you downloaded yourself (omit it with --download)")
+    ap.add_argument("--download", action="store_true", help="fetch the newest consolidated DECP file from data.gouv.fr by itself")
+    ap.add_argument("--dataset", help=f"data.gouv.fr dataset id (default env DECP_DATASET_ID, else {DEFAULT_DATASET})")
+    ap.add_argument("--format", default="csv")
+    ap.add_argument("--title-contains", help="pick the resource whose title contains this text")
+    ap.add_argument("--if-older-than-days", type=int, help="with --download: skip when a DECP load younger than N days exists")
+    ap.add_argument("--keep-file", action="store_true", help="keep the downloaded file in --work-dir")
+    ap.add_argument("--work-dir", default="data/downloads")
+    ap.add_argument("--source-url", help="dataset / resource URL the file comes from (the proof of every row); required with FILE")
     ap.add_argument("--label")
     ap.add_argument("--coverage-note")
     ap.add_argument("--rejects", default="data/exports/decp_rejects.csv")
@@ -320,6 +370,13 @@ def main() -> None:
     a = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     mapping = dict(m.split("=", 1) for m in a.map)
+    if a.download:
+        print(download_and_run(os.environ["DATABASE_URL"], a.dataset or os.environ.get("DECP_DATASET_ID", DEFAULT_DATASET), a.format,
+                               a.title_contains, a.label, a.coverage_note, a.rejects, mapping, a.work_dir, a.keep_file,
+                               a.if_older_than_days))
+        return
+    if not a.file or not a.source_url:
+        ap.error("give FILE and --source-url, or use --download")
     print(run(os.environ["DATABASE_URL"], a.file, a.source_url, a.label, a.coverage_note, a.rejects, mapping))
 
 

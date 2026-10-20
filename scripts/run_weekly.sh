@@ -37,6 +37,11 @@ if [ -n "${INPI_USERNAME:-}" ]; then step inpi python -m fbdb.enrich.inpi --limi
 if [ -n "${PAPPERS_API_KEY:-}" ]; then step pappers python -m fbdb.enrich.pappers --limit "${PAPPERS_PER_RUN:-200}"; else skip pappers "PAPPERS_API_KEY not set"; fi
 if [ -n "${GOOGLE_PLACES_API_KEY:-}" ]; then step places python -m fbdb.enrich.places --limit "${PLACES_PER_RUN:-100}"; else skip places "GOOGLE_PLACES_API_KEY not set"; fi
 
+# Public contracts (DECP): downloaded by itself from data.gouv.fr, at most once per DECP_REFRESH_DAYS (default 30). DECP_AUTO=0 disables it.
+if [ "${DECP_AUTO:-1}" = 1 ]; then step decp python -m fbdb.enrich.decp --download --if-older-than-days "${DECP_REFRESH_DAYS:-30}"; else skip decp "DECP_AUTO=0"; fi
+# ADEME RGE list: needs the CSV link you use in RGE_CSV_URL (no official permanent link is guessed).
+if [ -n "${RGE_CSV_URL:-}" ]; then step ademe_rge python -m fbdb.enrich.ademe_rge --download; else skip ademe_rge "RGE_CSV_URL not set"; fi
+
 # HubSpot export (the deliverable). EXPORT_AFTER_WEEKLY=0 disables it; EXPORT_INCLUDE_CLOSED=1 adds closed establishments
 # so HubSpot can be updated with closures; EXPORT_SIRET_IS_IMPORT_KEY=1 only if the HubSpot import uses SIRET as identifier.
 if [ "${EXPORT_AFTER_WEEKLY:-1}" = 1 ]; then
