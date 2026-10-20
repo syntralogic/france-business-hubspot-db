@@ -214,3 +214,14 @@ def test_search_hits_distinguishes_no_result_from_refused_query():
         raise AssertionError("expected QuotaExhausted")
     except w.QuotaExhausted:
         pass
+
+
+def test_review_platform_profile_urls_and_query():
+    assert s.profile_url("trustpilot", "https://fr.trustpilot.com/review/Alpha-Elec.fr?languages=all") == "https://www.trustpilot.com/review/alpha-elec.fr"
+    assert s.profile_url("trustpilot", "https://www.trustpilot.com/categories/electricians") is None
+    assert s.profile_url("trustpilot", "https://example.com/review/alpha.fr") is None
+    assert s.profile_url("pagesjaunes", "https://www.pagesjaunes.fr/pros/12345678") == "https://www.pagesjaunes.fr/pros/12345678"
+    assert s.profile_url("pagesjaunes", "https://www.pagesjaunes.fr/annuaire/lyon-69/electricien") is None
+    assert s.profile_url("pagesjaunes", "https://www.pagesjaunes.fr/pros/abc") is None
+    assert s.build_query("trustpilot", "ALPHA ELEC", "Lyon") == 'site:trustpilot.com "ALPHA ELEC" "Lyon"'
+    assert set(s.REVIEW_NETWORKS).isdisjoint(s.NETWORKS)           # never part of the default (paid) run

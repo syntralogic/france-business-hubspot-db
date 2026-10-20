@@ -26,3 +26,5 @@ The client brief asks for 16 sections in a fixed order. This table maps each one
 | App. D | Client decisions, data-provider checklist, email draft | [16-client-questions.md](16-client-questions.md) |
 | App. E | Render deployment (Blueprint, worker with disk, in-container scheduler) | [17-render-deployment.md](17-render-deployment.md) |
 | App. F | Free Render web service wrapper (alternative to the paid Blueprint) | [18-render-free-web-service.md](18-render-free-web-service.md) |
+| App. G | Enrichment gaps closed after the client's spec (per-item detail, limits, what is NOT verified live) | [19-enrichment-gaps.md](19-enrichment-gaps.md) |
+| App. H | Client handover: coverage of the spec, what is not built, what we need from the client | [20-client-handover.md](20-client-handover.md) |

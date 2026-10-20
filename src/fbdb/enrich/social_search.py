@@ -53,7 +53,12 @@ MAX_CANDIDATES = 3        # profile URLs examined per search (snippets are free;
 MAX_DIRECTORS = 2         # directors searched per company
 COMPANY_NETWORKS = ("facebook", "instagram", "tiktok", "linkedin_company", "youtube")
 NETWORKS = COMPANY_NETWORKS + ("linkedin_director",)
-SITE_OPERATOR = {"facebook": "facebook.com", "instagram": "instagram.com", "tiktok": "tiktok.com",
+# Review platforms (client spec section 10: "autres plateformes d'avis: identifier les fiches et conserver les liens verifies"). Same search,
+# same proof rules, same memory and caps as the social networks, but NOT part of the default run (2 more searches per company): ask for them
+# with `--reviews` or `--networks trustpilot,pagesjaunes`. Only the LINK of the verified page is kept: no review text, no rating.
+REVIEW_NETWORKS = ("trustpilot", "pagesjaunes")
+ALL_NETWORKS = NETWORKS + REVIEW_NETWORKS
+SITE_OPERATOR = {"trustpilot": "trustpilot.com", "pagesjaunes": "pagesjaunes.fr", "facebook": "facebook.com", "instagram": "instagram.com", "tiktok": "tiktok.com",
                  "linkedin_company": "linkedin.com/company", "linkedin_director": "linkedin.com/in", "youtube": "youtube.com"}
 
 _FB_SKIP = {"sharer", "sharer.php", "share", "share.php", "dialog", "plugins", "login", "login.php", "help", "policies", "tr", "l.php",
@@ -116,6 +121,10 @@ def profile_url(network: str, url: str) -> Optional[str]:
         return None
     if network == "linkedin_director":
         return f"https://www.linkedin.com/in/{segs[1]}" if host.endswith("linkedin.com") and low == "in" and len(segs) >= 2 else None
+    if network == "trustpilot":      # https://fr.trustpilot.com/review/<domain>
+        return f"https://www.trustpilot.com/review/{segs[1].lower()}" if host.endswith("trustpilot.com") and low == "review" and len(segs) >= 2 else None
+    if network == "pagesjaunes":     # https://www.pagesjaunes.fr/pros/<digits>
+        return f"https://www.pagesjaunes.fr/pros/{segs[1]}" if host == "pagesjaunes.fr" and low == "pros" and len(segs) >= 2 and segs[1].isdigit() else None
     if network == "youtube":
         if host not in ("youtube.com", "youtu.be"):
             return None
@@ -337,6 +346,8 @@ def store_result(cur, company_id: int, network: str, interlocutor_id: Optional[i
 
 
 def mirror_confirmed(cur, company_id: int, network: str, interlocutor_id: Optional[int], res: dict, source_id: int) -> None:
+    if network in REVIEW_NETWORKS:
+        return              # a review page is kept in social_searches (link + proof + date), it is not a contact of the company
     proof = f"{res['evidence_type']}: {res['proof']}"
     if network == "linkedin_director":
         cur.execute("UPDATE company_interlocutors SET profile_url = %s, match_proof = concat_ws(' | ', match_proof, %s::text), "
@@ -354,9 +365,9 @@ def mirror_confirmed(cur, company_id: int, network: str, interlocutor_id: Option
 
 def run(dsn: str, client=None, limit: int = 5, networks: tuple[str, ...] = NETWORKS, refresh_days: int = 180, retry_days: int = 7,
         cap: int = DAILY_CAP) -> dict:
-    bad = [n for n in networks if n not in NETWORKS]
+    bad = [n for n in networks if n not in ALL_NETWORKS]
     if bad:
-        raise ValueError(f"unknown networks {bad}: use {list(NETWORKS)}")
+        raise ValueError(f"unknown networks {bad}: use {list(ALL_NETWORKS)}")
     client = client or FirecrawlClient()
     stats = {"companies": 0, "searches": 0, "confirmed": 0, "to_verify": 0, "not_found": 0, "inaccessible": 0, "conflicts": 0,
              "errors": 0, "cap_reached": False, "stopped_no_credits": False}
@@ -403,12 +414,13 @@ def run(dsn: str, client=None, limit: int = 5, networks: tuple[str, ...] = NETWO
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=5, help="companies per run (paid: start with 5)")
-    ap.add_argument("--networks", default=",".join(NETWORKS), help="comma list, default all: " + ",".join(NETWORKS))
+    ap.add_argument("--networks", default=",".join(NETWORKS), help="comma list, default the social networks: " + ",".join(NETWORKS))
+    ap.add_argument("--reviews", action="store_true", help="search the review platforms instead: " + ",".join(REVIEW_NETWORKS))
     ap.add_argument("--refresh-days", type=int, default=180)
     ap.add_argument("--retry-days", type=int, default=7, help="delay before an 'inaccessible' search is retried")
     a = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    s = run(os.environ["DATABASE_URL"], limit=a.limit, networks=tuple(n.strip() for n in a.networks.split(",") if n.strip()),
+    s = run(os.environ["DATABASE_URL"], limit=a.limit, networks=REVIEW_NETWORKS if a.reviews else tuple(n.strip() for n in a.networks.split(",") if n.strip()),
             refresh_days=a.refresh_days, retry_days=a.retry_days)
     print(s)
     if s["stopped_no_credits"] or s["errors"]:

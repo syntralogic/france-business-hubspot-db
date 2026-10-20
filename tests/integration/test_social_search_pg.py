@@ -226,3 +226,43 @@ def test_a_linkedin_profile_without_proof_never_attaches_to_the_director(db):
     # a later proven hit does attach it (the candidate is replaced by the proven profile, never the other way round)
     ss.run(DSN, client=standard_client(), limit=10, networks=("linkedin_director",), refresh_days=0)
     assert q("SELECT profile_url FROM company_interlocutors") == [(LI_A,)]
+
+
+TP = "https://fr.trustpilot.com/review/alpha.fr"
+PJ = "https://www.pagesjaunes.fr/pros/12345678"
+
+
+def test_review_platforms_are_searched_on_request_only_and_keep_the_verified_link(db):
+    c = Fake({"trustpilot.com": [hit(TP, "Avis Alpha Elec", "Electricien Lyon. SIREN 552 100 554")],       # proof: the SIREN
+              "pagesjaunes.fr": [hit(PJ, "Alpha Elec Lyon", "Electricite generale")]})                    # no proof
+    answer = c.search_hits
+    c.search_hits = lambda query, limit=5: [] if "BETA" in query else answer(query, limit)             # nothing exists for company B
+    ss.run(DSN, client=c, limit=10)                                                                      # the default run: social only
+    assert all("trustpilot" not in x and "pagesjaunes" not in x for x in c.queries)
+    assert q("SELECT count(*) FROM social_searches WHERE network IN ('trustpilot','pagesjaunes')")[0][0] == 0
+
+    s = ss.run(DSN, client=c, limit=10, networks=ss.REVIEW_NETWORKS)
+    assert s["errors"] == 0 and s["searches"] == 4                                                       # 2 companies x 2 platforms
+    rows = {(r[0], r[1]): r[2:] for r in q("SELECT s.network, c.siren, s.status, s.candidate_url, s.evidence_type "
+                                           "FROM social_searches s JOIN companies c USING (company_id) "
+                                           "WHERE s.network IN ('trustpilot','pagesjaunes')")}
+    assert rows[("trustpilot", A)] == ("confirmed", "https://www.trustpilot.com/review/alpha.fr", "siren_on_page")
+    assert rows[("pagesjaunes", A)][0] == "to_verify"                                                     # no proof: a human decides
+    assert rows[("trustpilot", B)][0] == "not_found"                                                      # never "has no page"
+    # a review page is a link kept with its proof, it is NOT mirrored as a contact of the company
+    assert q("SELECT count(*) FROM company_contacts WHERE contact_type IN ('social','linkedin') AND position('trustpilot' in value) > 0")[0][0] == 0
+    # memory: a second run pays nothing
+    n = len(c.queries)
+    ss.run(DSN, client=c, limit=10, networks=ss.REVIEW_NETWORKS)
+    assert len(c.queries) == n
+
+
+def test_unknown_network_is_refused_and_review_networks_are_accepted_by_the_constraint(db):
+    with pytest.raises(ValueError, match="unknown networks"):
+        ss.run(DSN, client=Fake({}), networks=("myspace",))
+    with psycopg.connect(DSN, autocommit=True) as conn:
+        sql = (SQL_DIR / "029_review_platforms.sql").read_text(encoding="utf-8")
+        conn.execute(sql)
+        conn.execute(sql)                                                                                 # idempotent
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute("INSERT INTO social_searches (company_id, network, status) SELECT company_id, 'yelp', 'not_found' FROM companies LIMIT 1")
