@@ -1,6 +1,6 @@
 """job_runs recording and staleness check against a REAL PostgreSQL (TEST_DATABASE_URL)."""
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest

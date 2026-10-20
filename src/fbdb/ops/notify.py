@@ -16,7 +16,6 @@ import argparse
 import logging
 import os
 import smtplib
-import sys
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Optional

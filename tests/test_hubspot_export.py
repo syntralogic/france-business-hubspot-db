@@ -1,7 +1,7 @@
 import csv
 from datetime import date
 
-from fbdb.export.hubspot import HEADERS, MAX_ROWS_PER_FILE, build_row, export_companies, validate_row
+from fbdb.export.hubspot import HEADERS, MAX_ROWS_PER_FILE, build_row, export_companies
 
 SIREN = "552100554"
 SIRET = "55210055400013"

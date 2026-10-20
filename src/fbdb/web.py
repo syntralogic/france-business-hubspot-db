@@ -33,7 +33,6 @@ import os
 import subprocess
 import sys
 import threading
-import time
 import urllib.request
 from datetime import date, datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
