@@ -135,3 +135,17 @@ def test_021_idempotent_and_backfills_old_rows(db):
         for _ in range(2):
             c.execute((SQL_DIR / "021_places_status.sql").read_text(encoding="utf-8"))
         assert c.execute("SELECT status FROM company_reviews").fetchone()[0] == "to_verify"
+
+
+def test_export_view_exposes_when_the_rating_was_fetched(db):
+    with psycopg.connect(DSN) as conn:
+        cols = [r[0] for r in conn.execute("SELECT column_name FROM information_schema.columns WHERE table_name='v_hubspot_companies' "
+                                           "ORDER BY ordinal_position").fetchall()]
+    assert cols[-1] == "google_rating_collected_at"          # appended LAST: CREATE OR REPLACE VIEW cannot reorder existing columns
+
+
+def test_preflight_expected_tables_all_exist_after_the_migrations(db):
+    from fbdb.report import preflight
+    with psycopg.connect(DSN) as conn:
+        have = {r[0] for r in conn.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public'")}
+    assert [t for t in preflight.EXPECTED_TABLES if t not in have] == []                  # a wrong name here would cry "migration missing"

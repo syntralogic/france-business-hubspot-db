@@ -9,7 +9,7 @@ from __future__ import annotations
 import csv
 import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Iterable, Iterator, Optional
 
@@ -219,6 +219,10 @@ def validate_row(row: dict, row_no: int, src: dict, include_closed: bool = False
     return out
 
 
+def _as_date(v) -> date:
+    return v.date() if isinstance(v, datetime) else v if isinstance(v, date) else datetime.fromisoformat(str(v)).date()
+
+
 def export_companies(
     records: Iterable[dict],
     out_dir: Path,
@@ -226,6 +230,7 @@ def export_companies(
     include_closed: bool = False,
     siret_is_import_key: bool = False,
     allow_google_ratings: bool = False,
+    max_rating_age_days: int = 30,
 ) -> dict:
     """Write hubspot_companies_<date>_partNN.csv files (UTF-8, no BOM) and an error report CSV.
 
@@ -236,7 +241,8 @@ def export_companies(
     Confirm on the 100-row test import before switching it on.
 
     allow_google_ratings: Google's terms give no caching exception for rating / review count (only place_id), so
-    these two columns are blanked unless the client holds a written agreement or a licensed provider supplies them.
+    these two columns are blanked unless the client holds a written agreement or a licensed provider supplies them. Even then a rating
+    fetched more than `max_rating_age_days` (default 30) before the export is blanked (view column google_rating_collected_at).
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     run_date = run_date or date.today()
@@ -255,9 +261,18 @@ def export_companies(
         try:
             for i, src in enumerate(records, start=1):
                 row = build_row(src)
+                stale_rating = None
                 if not allow_google_ratings:
                     row["note_google"] = row["nb_avis_google"] = ""
+                else:
+                    got = src.get("google_rating_collected_at")        # absent = age unknown (older callers / tests): kept
+                    if row["note_google"] and got is not None and run_date - _as_date(got) > timedelta(days=max_rating_age_days):
+                        stale_rating = row["note_google"]               # Google allows no caching of a rating beyond ~30 days
+                        row["note_google"] = row["nb_avis_google"] = ""
                 issues = validate_row(row, i, src, include_closed)
+                if stale_rating:
+                    issues.append(Issue(i, row["siret"], row["id_interne"], "warning", "GOOGLE_RATING_STALE", "note_google",
+                                        f"Google rating older than {max_rating_age_days} days: not exported (refresh with fbdb.enrich.places)", stale_rating))
                 if row["siret"] in seen_siret:
                     issues.append(Issue(i, row["siret"], row["id_interne"], "error", "DUPLICATE_SIRET", "siret", "SIRET already present in this file", row["siret"]))
                 if row["domain"] and not siret_is_import_key:

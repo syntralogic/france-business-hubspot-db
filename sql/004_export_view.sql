@@ -39,7 +39,9 @@ SELECT
   (ph.value_normalized IS NOT NULL AND NOT EXISTS (SELECT 1 FROM contact_oppositions o WHERE o.contact_type = 'phone'
      AND o.value_normalized = ph.value_normalized AND o.channel = 'sms')) AS phone_sms_allowed,
   -- not exported to the CSV: function of the exported mailbox and whether it is an eligible (priority) one
-  em.contact_use AS email_use, em.eligible AS email_is_priority
+  em.contact_use AS email_use, em.eligible AS email_is_priority,
+  -- not exported to the CSV: when the Google rating was last fetched (the export blanks a rating older than its max age); keep LAST
+  rv.collected_at AS google_rating_collected_at
 FROM company_addresses a
 JOIN companies c ON c.company_id = a.company_id
 LEFT JOIN data_sources src ON src.source_id = c.primary_source_id
@@ -92,6 +94,6 @@ LEFT JOIN LATERAL (
   SELECT d.first_name, d.last_name, d.role FROM company_directors d
   WHERE d.company_id = c.company_id AND d.is_active ORDER BY d.start_date DESC NULLS LAST LIMIT 1) dir ON TRUE
 LEFT JOIN LATERAL (
-  SELECT r.rating, r.review_count, r.profile_url FROM company_reviews r
+  SELECT r.rating, r.review_count, r.profile_url, r.collected_at FROM company_reviews r
   WHERE r.establishment_id = a.establishment_id AND r.match_confidence >= 0.8 LIMIT 1) rv ON TRUE
 WHERE c.is_diffusible AND a.is_diffusible;   -- company AND establishment must both be diffusible

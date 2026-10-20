@@ -103,3 +103,25 @@ def test_google_ratings_blanked_by_default(tmp_path):
     with open(res2["files"][0], newline="", encoding="utf-8") as fh:
         r2 = list(csv.DictReader(fh))[0]
     assert r2["Note Google"] == "4.6" and r2["Nombre avis Google"] == "120"
+
+
+def test_allowed_google_rating_is_blanked_when_older_than_the_max_age_and_kept_when_fresh_or_age_unknown(tmp_path):
+    from datetime import datetime, timezone
+    run_date = date(2026, 10, 13)
+
+    def exported(extra, **kw):
+        src = good(google_rating="4.6", google_reviews="120", **extra)
+        res = export_companies([src], tmp_path / f"o{len(list(tmp_path.iterdir()))}", run_date=run_date, allow_google_ratings=True, **kw)
+        with open(res["files"][0], newline="", encoding="utf-8") as fh:
+            row = list(csv.DictReader(fh))[0]
+        return row["Note Google"], row["Nombre avis Google"], res
+
+    fresh = {"google_rating_collected_at": datetime(2026, 10, 1, tzinfo=timezone.utc)}      # 12 days
+    old = {"google_rating_collected_at": datetime(2026, 8, 1, tzinfo=timezone.utc)}         # 73 days
+    assert exported(fresh)[:2] == ("4.6", "120")
+    assert exported({})[:2] == ("4.6", "120")                                               # age unknown (not from the view): unchanged
+    note, reviews, res = exported(old)
+    assert (note, reviews) == ("", "")
+    assert exported(old, max_rating_age_days=90)[:2] == ("4.6", "120")                      # the limit is a parameter
+    assert res["warnings"] == 1 and res["exported"] == 1                                    # the row is exported, the rating is reported
+    assert "GOOGLE_RATING_STALE" in open(res["error_report"], encoding="utf-8").read()
