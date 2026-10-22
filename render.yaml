@@ -35,6 +35,10 @@ services:
         sync: false            # Render asks for the value when the Blueprint is created
       - key: INITIAL_LOAD
         value: "1"             # one-time load of the SIRENE stock; skipped automatically once done
+      - key: SCOPE_NAF
+        sync: false            # target sectors, e.g. "41,42,43,71.1" (main NAF prefixes); EMPTY = every sector. Read by the initial load AND the weekly delta
+      - key: SCOPE_DEPARTMENTS
+        sync: false            # target departments, e.g. "69,42,01"; EMPTY = all of France
       - key: NAF_CSV_URL
         sync: false            # URL of naf_rev2.csv (see docs/17), or leave empty and upload the file by SSH
       - key: LEGAL_FORMS_CSV_URL

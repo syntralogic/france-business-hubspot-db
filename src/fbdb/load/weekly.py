@@ -22,6 +22,7 @@ import psycopg
 
 from fbdb.extract.sirene_api import SireneApiClient
 from fbdb.extract.sirene_bulk import map_etablissement, map_unite_legale
+from fbdb.load.scope import Scope
 from fbdb.load.sirene_loader import (
     ETAB_STG_COLS, UL_STG_COLS, SYNC_ESTABLISHMENT_DIFFUSION, UPDATE_ARTISAN_FLAG, UPSERT_COMPANIES, UPSERT_ESTABLISHMENTS, _copy_rows,
 )
@@ -179,6 +180,13 @@ def run(since: str | None, dsn: str, client=None) -> dict:
                 if m:
                     ul_seen[m["siren"]] = m
             etabs = [m for m in (map_etablissement(r) for r in rows) if m]
+            scope = Scope.from_env()
+            if scope.active:
+                # a company outside the target is added only if it is already in the base (its changes / closure must still be seen)
+                cur.execute("SELECT siren FROM companies WHERE siren = ANY(%s)", (list(ul_seen),))
+                known = {r[0] for r in cur.fetchall()}
+                ul_seen = {k: v for k, v in ul_seen.items() if k in known or scope.keep_company(v)}
+                etabs = [e for e in etabs if e["siren"] in ul_seen and (e["siren"] in known or scope.keep_establishment(e))]
             _copy_rows(cur, "stg_sirene_ul", UL_STG_COLS, ul_seen.values())
             _copy_rows(cur, "stg_sirene_etab", ETAB_STG_COLS, etabs)
 

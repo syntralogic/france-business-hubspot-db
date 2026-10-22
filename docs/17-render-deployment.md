@@ -67,3 +67,11 @@ works the same way, into `/app/data/raw/`. Import into HubSpot as described in `
 3. Trigger a first weekly run once with `RUN_WEEKLY_ON_START=1` (set, redeploy, then remove it): exit 0, `job_runs` row `ok`, export files present.
 4. Daily check prints `ok`; a test alert reaches Slack/email.
 5. Download one export folder by SSH and import 100+ rows into a HubSpot sandbox (accents intact, no unintended merges).
+
+
+## Loading only the target (scope: sectors and departments)
+The full SIRENE stock is every active company of France (millions of rows), far above the 500k to 1M target. Set `SCOPE_NAF` (prefixes of the MAIN NAF, dots optional: `41,42,43,71.1`) and / or `SCOPE_DEPARTMENTS` (`69,42,01`, `2A`, `971`) on the worker before the first load; both are read by the initial load and by the weekly delta (`fbdb/load/scope.py`). Left empty = everything. CLI form: `python -m fbdb.load.sirene_loader --ul ... --etab ... --only-active --naf 43 --departments 69`.
+- A company is loaded when its main NAF matches (a company without a valid NAF is not loaded when a NAF scope is set) and, when departments are set, when at least one of its establishments is in them; all its establishments in those departments are kept.
+- The weekly delta adds a new company only if it is in scope; a company already in the base keeps being updated and closed whatever its new NAF.
+- Widening the scope later: change the variables and run the load again (upsert, nothing is deleted); narrowing it does not delete rows already loaded.
+- The batch note of `import_export_batches` records the scope used. Nothing is invented: only which rows of the official files are kept. The client still has to choose the sectors and departments (docs/16, question 1).

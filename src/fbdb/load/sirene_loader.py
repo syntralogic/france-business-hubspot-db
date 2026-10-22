@@ -16,6 +16,7 @@ from pathlib import Path
 import psycopg
 
 from fbdb.extract.sirene_bulk import map_etablissement, map_unite_legale, read_csv_rows
+from fbdb.load.scope import Scope
 
 log = logging.getLogger("fbdb.sirene_loader")
 
@@ -127,7 +128,28 @@ def _copy_rows(cur: psycopg.Cursor, table: str, cols: list[str], rows, flush_eve
     return n
 
 
-def load(ul_path: Path, etab_path: Path, only_active: bool, dsn: str) -> None:
+DROP_COMPANIES_WITHOUT_ESTABLISHMENT = """
+DELETE FROM stg_sirene_ul u WHERE NOT EXISTS (SELECT 1 FROM stg_sirene_etab e WHERE e.siren = u.siren)
+"""
+
+
+def load(ul_path: Path, etab_path: Path, only_active: bool, dsn: str, scope: Scope | None = None) -> None:
+    """Bulk load. `scope` (see fbdb.load.scope) keeps only the target sectors / departments; default = SCOPE_NAF / SCOPE_DEPARTMENTS, else everything."""
+    scope = scope if scope is not None else Scope.from_env()
+    kept: set[str] = set()
+
+    def ul_rows():
+        for r in read_csv_rows(ul_path, map_unite_legale, only_active):
+            if scope.keep_company(r):
+                if scope.naf_prefixes:
+                    kept.add(r["siren"])
+                yield r
+
+    def etab_rows():
+        for r in read_csv_rows(etab_path, map_etablissement, only_active):
+            if (not scope.naf_prefixes or r["siren"] in kept) and scope.keep_establishment(r):
+                yield r
+
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -138,16 +160,18 @@ def load(ul_path: Path, etab_path: Path, only_active: bool, dsn: str) -> None:
             conn.commit()
             try:
                 cur.execute("TRUNCATE stg_sirene_ul, stg_sirene_etab")
-                n_ul = _copy_rows(cur, "stg_sirene_ul", UL_STG_COLS, read_csv_rows(ul_path, map_unite_legale, only_active))
-                n_et = _copy_rows(cur, "stg_sirene_etab", ETAB_STG_COLS, read_csv_rows(etab_path, map_etablissement, only_active))
+                n_ul = _copy_rows(cur, "stg_sirene_ul", UL_STG_COLS, ul_rows())
+                n_et = _copy_rows(cur, "stg_sirene_etab", ETAB_STG_COLS, etab_rows())
+                if scope.departments:                       # a company with no establishment in the target departments is not loaded
+                    cur.execute(DROP_COMPANIES_WITHOUT_ESTABLISHMENT)
                 cur.execute(UPSERT_COMPANIES)
                 cur.execute(UPSERT_ESTABLISHMENTS)
                 cur.execute(SYNC_ESTABLISHMENT_DIFFUSION)
                 cur.execute(UPDATE_ARTISAN_FLAG)
                 cur.execute(SET_WATERMARK)
                 cur.execute(
-                    "UPDATE import_export_batches SET status='success', finished_at=now(), rows_read=%s WHERE batch_id=%s",
-                    (n_ul + n_et, batch_id),
+                    "UPDATE import_export_batches SET status='success', finished_at=now(), rows_read=%s, notes=%s WHERE batch_id=%s",
+                    (n_ul + n_et, "scope: " + scope.describe() if scope.active else None, batch_id),
                 )
                 conn.commit()
                 log.info("Load finished: %d legal units, %d establishments", n_ul, n_et)
@@ -166,9 +190,11 @@ def main() -> None:
     ap.add_argument("--ul", type=Path, required=True)
     ap.add_argument("--etab", type=Path, required=True)
     ap.add_argument("--only-active", action="store_true")
+    ap.add_argument("--naf", help="keep only companies whose main NAF starts with one of these (comma list, dots optional): 41,42,43,71.1")
+    ap.add_argument("--departments", help="keep only establishments of these departments (comma list): 69,42,01,2A")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    load(args.ul, args.etab, args.only_active, os.environ["DATABASE_URL"])
+    load(args.ul, args.etab, args.only_active, os.environ["DATABASE_URL"], Scope.from_env(args.naf, args.departments))
 
 
 if __name__ == "__main__":
