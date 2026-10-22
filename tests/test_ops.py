@@ -92,6 +92,9 @@ def _run_script(tmp_path, failing: str):
     bindir.mkdir()
     shim = bindir / "python"
     calls = tmp_path / "calls.txt"
+    snap = root / "scripts" / "snapshot.sh"                       # stand-in: the real one needs pg_dump and a database
+    snap.write_text(f'#!/usr/bin/env bash\necho "scripts/snapshot.sh" >> {calls}\n[[ "{failing}" == snapshot ]] && exit 1\nexit 0\n')
+    snap.chmod(snap.stat().st_mode | stat.S_IEXEC)
     shim.write_text(f'#!/usr/bin/env bash\necho "$@" >> {calls}\n[[ "$*" == *{failing}* ]] && exit 1\nexit 0\n')
     shim.chmod(shim.stat().st_mode | stat.S_IEXEC)
     env = {"PATH": f"{bindir}:{os.environ['PATH']}", "HOME": str(tmp_path)}
@@ -120,3 +123,11 @@ def test_run_weekly_all_ok_pings_and_exits_zero(tmp_path):
 def test_run_weekly_delta_failure_is_failed_status(tmp_path):
     p, calls = _run_script(tmp_path, "fbdb.load.weekly")
     assert p.returncode == 1 and any("--status failed" in c for c in calls)
+
+
+def test_run_weekly_runs_the_snapshot_after_the_other_steps_and_its_failure_is_only_partial(tmp_path):
+    p, calls = _run_script(tmp_path, "__nothing__")
+    assert "scripts/snapshot.sh" in calls and calls.index("scripts/snapshot.sh") > next(i for i, c in enumerate(calls) if "fbdb.enrich.bodacc" in c)
+    p, calls = _run_script(tmp_path / "second", "snapshot")
+    assert p.returncode == 1 and "failed: snapshot" in p.stderr
+    assert any("--status partial" in c and "--failed-steps snapshot" in c for c in calls)       # not "failed": the data itself is fine

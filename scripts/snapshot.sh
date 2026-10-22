@@ -18,7 +18,10 @@ if ! pg_dump -Fc --no-owner "$DATABASE_URL" > "$OUT.tmp" 2> "$OUT.err"; then
   exit 1
 fi
 [ -s "$OUT.tmp" ] || { echo "snapshot is empty" >&2; exit 1; }
-pg_restore --list "$OUT.tmp" | grep -q "TABLE DATA" || { echo "snapshot has no table data" >&2; exit 1; }
+# read the list into a variable first: `pg_restore --list | grep -q` ends the pipe at the first match and, with pipefail, a big archive
+# would then look like a failure (SIGPIPE)
+LIST="$(pg_restore --list "$OUT.tmp")" || { echo "snapshot cannot be read back by pg_restore" >&2; exit 1; }
+grep -q "TABLE DATA" <<<"$LIST" || { echo "snapshot has no table data" >&2; exit 1; }
 mv "$OUT.tmp" "$OUT"
 find "$DIR" -name 'fbdb_*.dump' -mtime +"$KEEP" -delete
 echo "snapshot written: $OUT ($(du -h "$OUT" | cut -f1)); kept $KEEP days. Copy the folder off the server too."
