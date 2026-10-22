@@ -6,7 +6,7 @@ for companies in the slice. Meant for testing the pipeline and the viewer, NOT a
 (the files are ordered by SIREN number).
 
   python -m fbdb.load.demo_load [--rows 20000]        (needs DATABASE_URL)
-  Automatic at web start when the companies table is empty (AUTO_DEMO_LOAD=0 to disable, DEMO_ROWS to resize).
+  Optional at web start when the companies table is empty: OFF by default, AUTO_DEMO_LOAD=1 enables it (DEMO_ROWS to resize). The real data comes from scripts/initial_load.sh (full SIRENE stock).
 """
 from __future__ import annotations
 

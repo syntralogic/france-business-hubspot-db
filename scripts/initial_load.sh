@@ -10,7 +10,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 : "${DATABASE_URL:?DATABASE_URL is not set}"
 WORK="${1:-data/raw}"; mkdir -p "$WORK" reports
-BASE="${SIRENE_STOCK_BASE:-https://files.data.gouv.fr/insee-sirene}"
+# Stable data.gouv.fr resource links of the Insee SIRENE stock zips (the old files.data.gouv.fr/insee-sirene paths no longer exist).
+# Same defaults as fbdb.load.demo_load; override with SIRENE_UL_URL / SIRENE_ETAB_URL if Insee republishes them.
+UL_URL="${SIRENE_UL_URL:-https://www.data.gouv.fr/api/1/datasets/r/825f4199-cadd-486c-ac46-a65a8ea1a047}"
+ETAB_URL="${SIRENE_ETAB_URL:-https://www.data.gouv.fr/api/1/datasets/r/0651fb76-bcf3-4f6a-a38d-bc04fa708576}"
 NAF="${NAF_CSV:-$WORK/naf_rev2.csv}"; LEGAL="${LEGAL_FORMS_CSV:-$WORK/categories_juridiques.csv}"
 LOG="reports/initial_load_$(date +%F).log"
 say() { echo "$(date -u +%FT%TZ) $*" | tee -a "$LOG"; }
@@ -19,7 +22,8 @@ say() { echo "$(date -u +%FT%TZ) $*" | tee -a "$LOG"; }
 for f in StockUniteLegale StockEtablissement; do
   if [ ! -f "$WORK/${f}_utf8.csv" ]; then
     say "download $f"
-    curl -fSL --retry 5 --retry-delay 10 -o "$WORK/$f.zip" "$BASE/${f}_utf8.zip"
+    url="$UL_URL"; [ "$f" = "StockEtablissement" ] && url="$ETAB_URL"
+    curl -fSL --retry 5 --retry-delay 10 -o "$WORK/$f.zip" "$url"
     unzip -oq "$WORK/$f.zip" -d "$WORK" && rm "$WORK/$f.zip"
   fi
 done

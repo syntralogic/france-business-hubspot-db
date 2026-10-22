@@ -4,8 +4,8 @@
   2. INSEE Sirene API (INSEE_API_KEY, already needed by the weekly job): the establishment + legal unit for those SIRETs.
   3. Normal loader (companies, establishments), then the normal ADEME RGE loader attaches the certificates.
 
-Automatic at web start when the database holds no RGE certificate yet (AUTO_RGE_DEMO=0 to disable,
-RGE_DEMO_COMPANIES to resize, default 3000). Manual: python -m fbdb.load.rge_demo [--companies 3000]
+Optional at web start when the database holds no RGE certificate yet: OFF by default, AUTO_RGE_DEMO=1 enables it
+(RGE_DEMO_COMPANIES to resize, default 3000). Manual: python -m fbdb.load.rge_demo [--companies 3000]
 """
 from __future__ import annotations
 

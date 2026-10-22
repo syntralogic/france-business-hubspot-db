@@ -42,11 +42,11 @@ def ensure_schema_safe(dsn: str | None) -> None:
     except Exception as exc:
         log.error("schema init failed: %s", str(exc)[:500])
         return
-    if os.environ.get("AUTO_DEMO_LOAD", "1") != "0":   # free demo slice, only into an empty database
+    if os.environ.get("AUTO_DEMO_LOAD", "0") == "1":   # opt-in demo slice (default OFF: real data comes from the full load)
         try:
             from fbdb.load.demo_load import demo_load, is_empty
             if is_empty(dsn):
-                log.info("database is empty: loading a small demo slice of SIRENE (AUTO_DEMO_LOAD=0 to disable)")
+                log.info("database is empty: loading a small demo slice of SIRENE (AUTO_DEMO_LOAD=1 enabled)")
                 demo_load(dsn, int(os.environ.get("DEMO_ROWS", "20000")))
                 log.info("demo load done")
         except Exception as exc:
@@ -56,12 +56,12 @@ def ensure_schema_safe(dsn: str | None) -> None:
 
 def ensure_rge_demo_safe(dsn: str | None) -> None:
     """Free RGE demo data (real artisans with certificates) when the database has none yet."""
-    if not dsn or os.environ.get("AUTO_RGE_DEMO", "1") == "0":
+    if not dsn or os.environ.get("AUTO_RGE_DEMO", "0") != "1":
         return
     try:
         from fbdb.load.rge_demo import has_rge, rge_demo
         if not has_rge(dsn):
-            log.info("no RGE data yet: loading RGE companies (ADEME + Sirene API), AUTO_RGE_DEMO=0 to disable")
+            log.info("no RGE data yet: loading RGE companies (ADEME + Sirene API), AUTO_RGE_DEMO=1 enabled")
             rge_demo(dsn, int(os.environ.get("RGE_DEMO_COMPANIES", "3000")))
     except Exception as exc:
         log.error("rge demo failed: %s", str(exc)[:500])

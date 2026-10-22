@@ -55,3 +55,7 @@ its own `RENDER_EXTERNAL_URL/health` every 5 minutes so Render does not put it t
 - Supabase free: 500 MB database (the full SIRENE stock does not fit), project paused after 7 days of inactivity.
   A free Render database is deleted after 30 days.
 - Not run on a real Render instance from this repository's CI: check `/status` after the first run.
+
+
+## Demo data is now OFF by default
+The automatic demo slices (`AUTO_DEMO_LOAD`: the first ~20,000 SIRENE rows, about 9,000 active companies; `AUTO_RGE_DEMO`: ~3,000 RGE companies) are **opt-in**: set `AUTO_DEMO_LOAD=1` / `AUTO_RGE_DEMO=1` to get them on an empty free database. The rows of the demo are real SIRENE companies (just a small slice in SIREN order, not representative of France). The real data comes from the full SIRENE load (`scripts/initial_load.sh`, `INITIAL_LOAD=1` on the paid worker, docs/17). It is an upsert on SIREN: demo rows already in the database are simply updated by it, nothing needs to be deleted first. The stock download uses the stable data.gouv.fr resource links (`SIRENE_UL_URL`, `SIRENE_ETAB_URL`); **NOT verified live** (the build sandbox has no access to data.gouv.fr).
