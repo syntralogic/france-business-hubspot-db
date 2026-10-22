@@ -42,6 +42,10 @@ if [ "${DECP_AUTO:-1}" = 1 ]; then step decp python -m fbdb.enrich.decp --downlo
 # ADEME RGE list: needs the CSV link you use in RGE_CSV_URL (no official permanent link is guessed).
 if [ -n "${RGE_CSV_URL:-}" ]; then step ademe_rge python -m fbdb.enrich.ademe_rge --download; else skip ademe_rge "RGE_CSV_URL not set"; fi
 
+# One-file snapshot of the whole database on the persistent disk (scripts/snapshot.sh). SNAPSHOT_AFTER_WEEKLY=0 disables it
+# (the free Render web service has no persistent disk: a file written there would disappear).
+if [ "${SNAPSHOT_AFTER_WEEKLY:-1}" = 1 ]; then step snapshot scripts/snapshot.sh; else skip snapshot "SNAPSHOT_AFTER_WEEKLY=0"; fi
+
 # HubSpot export (the deliverable). EXPORT_AFTER_WEEKLY=0 disables it; EXPORT_INCLUDE_CLOSED=1 adds closed establishments
 # so HubSpot can be updated with closures; EXPORT_SIRET_IS_IMPORT_KEY=1 only if the HubSpot import uses SIRET as identifier.
 if [ "${EXPORT_AFTER_WEEKLY:-1}" = 1 ]; then

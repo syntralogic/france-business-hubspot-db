@@ -7,6 +7,9 @@ Reference: the client's French "mode d'emploi de collecte" (sections 1 to 13). T
 ## What every value carries (spec section 13)
 Source and URL or provider, collection date, date of the fact or exercise, last verification, level (company / establishment / person), verification status (confirmed / declared / provider / inferred / to verify), absence status (not searched / not found / inaccessible / not available), proof of the match, conflicts kept in `field_conflicts` (never silently overwritten), opposition per channel checked at every export and every paid verification. "Not found" never means "does not exist".
 
+## Where the data lives
+Everything collected is kept in a dedicated PostgreSQL database (hosted in the EU on Render), not in files of the code repository. Each weekly run also writes one restorable snapshot file of the whole database on the persistent disk (`scripts/snapshot.sh`, 28 days kept), and the HubSpot CSV exports are written beside it. Paid lookups are remembered so that nothing is paid or fetched twice, within each provider's terms. Hosting (Render database, worker, disk) is a running cost of the client's choice: see docs/17.
+
 ## Coverage of the spec
 | Section | Status |
 |---|---|

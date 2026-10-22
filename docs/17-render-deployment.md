@@ -47,7 +47,7 @@ works the same way, into `/app/data/raw/`. Import into HubSpot as described in `
 ## 5. Operating rules
 - `autoDeployTrigger` is `off`: deploy with Manual Deploy, never on Monday around 03:00 UTC. A deploy stops the running job
   (SIGTERM, up to 300 s grace). A job stopped that way is recorded as failed/stale by the daily check and the next Monday run repeats it.
-- Backups: use the database backups of the Render Postgres plan (check what your plan includes). `scripts/backup.sh` is for the VPS setup.
+- Backups: the weekly run writes `data/backups/fbdb_YYYY-MM-DD.dump` on the persistent disk (`scripts/snapshot.sh`, 28 days kept, G10 in docs/19); also use the database backups of the Render Postgres plan (check what your plan includes) and copy the folder off the server. `scripts/backup.sh` is for the VPS setup.
 - Logs: Render log stream for the worker, plus `/app/data/reports/run_<date>.log` (kept 90 days) and the `job_runs` table.
 - Disk is single-instance and cannot be shrunk. Resize in the dashboard before it fills; check `df -h /app/data` over SSH.
 
