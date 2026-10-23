@@ -137,9 +137,16 @@ def load(ul_path: Path, etab_path: Path, only_active: bool, dsn: str, scope: Sco
     """Bulk load. `scope` (see fbdb.load.scope) keeps only the target sectors / departments; default = SCOPE_NAF / SCOPE_DEPARTMENTS, else everything."""
     scope = scope if scope is not None else Scope.from_env()
     kept: set[str] = set()
+    # With a department scope, first find the SIRENs that have an establishment there, so the (huge) company file is cut
+    # BEFORE staging: only those companies reach the database (matters on a small database such as Supabase free, 500 MB).
+    dept_sirens: set[str] | None = None
+    if scope.departments:
+        dept_sirens = {r["siren"] for r in read_csv_rows(etab_path, map_etablissement, only_active) if scope.keep_establishment(r)}
 
     def ul_rows():
         for r in read_csv_rows(ul_path, map_unite_legale, only_active):
+            if dept_sirens is not None and r["siren"] not in dept_sirens:
+                continue
             if scope.keep_company(r):
                 if scope.naf_prefixes:
                     kept.add(r["siren"])
