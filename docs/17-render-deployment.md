@@ -75,3 +75,17 @@ The full SIRENE stock is every active company of France (millions of rows), far 
 - The weekly delta adds a new company only if it is in scope; a company already in the base keeps being updated and closed whatever its new NAF.
 - Widening the scope later: change the variables and run the load again (upsert, nothing is deleted); narrowing it does not delete rows already loaded.
 - The batch note of `import_export_batches` records the scope used. Nothing is invented: only which rows of the official files are kept. The client still has to choose the sectors and departments (docs/16, question 1).
+
+## Removing the demo data and loading the real data from your own computer
+Render's free web service has no shell, but the Render Postgres has an **External Database URL** (Render dashboard > the database > Connections) that works from any computer. With it:
+```
+export DATABASE_URL="<External Database URL>"
+PYTHONPATH=src python -m fbdb.ops.purge_all            # dry run: prints the counts, deletes nothing
+PYTHONPATH=src python -m fbdb.ops.purge_all --yes      # empties the demo companies and everything attached (reference tables, batch history and today's API counters are kept)
+export SCOPE_NAF="41,42,43" SCOPE_DEPARTMENTS="69"      # target (client decides); empty = all of France
+bash scripts/initial_load.sh                            # downloads the SIRENE stock (several GB on your disk) and loads only the scope
+```
+- The demo rows are real SIRENE companies, so they cannot be told apart from real ones: `purge_all` empties everything. Purge BEFORE any paid enrichment (the paid-memory tables are emptied too, a paid module would pay again).
+- Render's free Postgres is small (1 GB, and it expires after 30 days): a scoped load of the building trades in a few departments fits, all of France does not. For the full target use a paid Render database.
+- `initial_load.sh` needs `data/raw/naf_rev2.csv` and `data/raw/categories_juridiques.csv` (INSEE files, see above). Demo auto-load is off by default, so the base is not refilled with the demo slice on restart.
+- Not verified live (no access to Render or data.gouv.fr from the build sandbox).
