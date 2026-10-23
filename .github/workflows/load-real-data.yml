@@ -1,0 +1,62 @@
+name: Load real SIRENE data
+# Manual run: GitHub -> Actions -> "Load real SIRENE data" -> Run workflow.
+# Needs ONE repo secret: DATABASE_URL (Render Postgres EXTERNAL connection string).
+on:
+  workflow_dispatch:
+    inputs:
+      naf:
+        description: "Main NAF prefixes, comma list (building trades = 41,42,43). Empty = all sectors"
+        default: "41,42,43"
+      departments:
+        description: "Departments, comma list (e.g. 69,42,01). Empty = all France"
+        default: ""
+      purge_demo:
+        description: "Empty the demo companies first (yes/no)"
+        default: "yes"
+      naf_csv_url:
+        description: "Optional: URL of naf_rev2.csv (labels only, load works without)"
+        default: ""
+      legal_forms_csv_url:
+        description: "Optional: URL of categories_juridiques.csv"
+        default: ""
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SCOPE_NAF: ${{ inputs.naf }}
+      SCOPE_DEPARTMENTS: ${{ inputs.departments }}
+      UL_URL: https://www.data.gouv.fr/api/1/datasets/r/825f4199-cadd-486c-ac46-a65a8ea1a047
+      ETAB_URL: https://www.data.gouv.fr/api/1/datasets/r/0651fb76-bcf3-4f6a-a38d-bc04fa708576
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: pip install -r requirements.txt -c constraints.txt && pip install -e . 2>/dev/null || true
+      - name: Check secret
+        run: test -n "$DATABASE_URL" || { echo "Add repo secret DATABASE_URL first"; exit 1; }
+      - name: Schema
+        run: bash scripts/init_db.sh
+      - name: Purge demo
+        if: ${{ inputs.purge_demo == 'yes' }}
+        run: python -m fbdb.ops.purge_all --yes
+      - name: Reference labels (optional)
+        if: ${{ inputs.naf_csv_url != '' && inputs.legal_forms_csv_url != '' }}
+        run: |
+          mkdir -p data/raw
+          curl -fSL -o data/raw/naf_rev2.csv "${{ inputs.naf_csv_url }}"
+          curl -fSL -o data/raw/categories_juridiques.csv "${{ inputs.legal_forms_csv_url }}"
+          python -m fbdb.load.reference --naf data/raw/naf_rev2.csv --legal-forms data/raw/categories_juridiques.csv
+      - name: Download SIRENE
+        run: |
+          mkdir -p data/raw
+          curl -fSL --retry 5 --retry-delay 10 -o data/raw/ul.zip "$UL_URL"
+          curl -fSL --retry 5 --retry-delay 10 -o data/raw/et.zip "$ETAB_URL"
+          unzip -oq data/raw/ul.zip -d data/raw && unzip -oq data/raw/et.zip -d data/raw && rm data/raw/*.zip
+          ls -lh data/raw
+      - name: Load (scoped)
+        run: |
+          python -m fbdb.load.sirene_loader --ul data/raw/StockUniteLegale_utf8.csv --etab data/raw/StockEtablissement_utf8.csv --only-active
+      - name: Count
+        run: psql "$DATABASE_URL" -Atc "select 'companies', count(*) from companies"
