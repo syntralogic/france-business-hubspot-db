@@ -8,8 +8,8 @@ on:
         description: "Main NAF prefixes, comma list (building trades = 41,42,43). Empty = all sectors"
         default: "41,42,43"
       departments:
-        description: "Departments, comma list (e.g. 69,42,01). Empty = all France"
-        default: ""
+        description: "Departments, comma list (e.g. 69,42,01). Free Supabase is 500 MB: start small. Empty = all France (will NOT fit)"
+        default: "69"
       purge_demo:
         description: "Empty the demo companies first (yes/no)"
         default: "yes"
@@ -60,3 +60,5 @@ jobs:
           python -m fbdb.load.sirene_loader --ul data/raw/StockUniteLegale_utf8.csv --etab data/raw/StockEtablissement_utf8.csv --only-active
       - name: Count
         run: psql "$DATABASE_URL" -Atc "select 'companies', count(*) from companies"
+      - name: Database size
+        run: psql "$DATABASE_URL" -Atc "select pg_size_pretty(pg_database_size(current_database()))"
