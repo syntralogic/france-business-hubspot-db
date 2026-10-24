@@ -220,6 +220,9 @@ def main() -> None:
     if os.environ.get("AUTO_INIT_SCHEMA", "1") != "0":   # background: the health check must answer at once
         threading.Thread(target=ensure_schema_safe, args=(os.environ.get("DATABASE_URL"),), daemon=True).start()
     server = make_server("0.0.0.0", port, JobManager(keepalive=self_ping), token)
+    if os.environ.get("DATABASE_URL"):   # compute the dashboard header counts in the background right away
+        from fbdb.api import warm_stats
+        warm_stats(os.environ["DATABASE_URL"])
     log.info("listening on port %s", port)
     server.serve_forever()
 

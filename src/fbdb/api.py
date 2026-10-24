@@ -18,6 +18,7 @@ Endpoints (GET, JSON):
 """
 from __future__ import annotations
 
+import threading
 import time
 from typing import Optional
 
@@ -71,8 +72,8 @@ def build_query(params: dict) -> tuple[str, list, int, int]:
     return where, values, page, per_page
 
 
-def _connect(dsn: str):
-    conn = psycopg.connect(dsn, row_factory=dict_row, options=f"-c statement_timeout={STATEMENT_TIMEOUT_MS}")
+def _connect(dsn: str, timeout_ms: int = STATEMENT_TIMEOUT_MS):
+    conn = psycopg.connect(dsn, row_factory=dict_row, options=f"-c statement_timeout={timeout_ms}")
     conn.read_only = True
     return conn
 
@@ -90,16 +91,44 @@ def search_companies(dsn: str, params: dict) -> dict:
 _stats_cache: dict = {"at": 0.0, "value": None}
 
 
-def stats(dsn: str, ttl: float = 60.0) -> dict:
-    if _stats_cache["value"] is not None and time.monotonic() - _stats_cache["at"] < ttl:
-        return _stats_cache["value"]
-    with _connect(dsn) as conn:
+STATS_TIMEOUT_MS = 120_000   # the header counts run over the heavy export view: far slower than a page of 25 rows
+_stats_lock = threading.Lock()
+
+
+def _compute_stats(dsn: str) -> dict:
+    with _connect(dsn, STATS_TIMEOUT_MS) as conn:
         row = conn.execute(
             f"SELECT count(*) AS establishments, count(DISTINCT v.siren) AS companies, "
             f"count(*) FILTER (WHERE v.rge_labels IS NOT NULL OR v.certifications IS NOT NULL) AS rge_certified, "
             f"count(*) FILTER (WHERE v.website IS NOT NULL) AS with_website {FROM}").fetchone()
     _stats_cache.update(at=time.monotonic(), value=row)
     return row
+
+
+def _refresh_stats(dsn: str) -> None:
+    if not _stats_lock.acquire(blocking=False):
+        return  # a refresh is already running
+    try:
+        _compute_stats(dsn)
+    except Exception:  # keep serving the last good value
+        pass
+    finally:
+        _stats_lock.release()
+
+
+def stats(dsn: str, ttl: float = 900.0) -> dict:
+    """Header counts. Cached 15 min; an expired value is served at once while a background thread refreshes it."""
+    value = _stats_cache["value"]
+    if value is not None:
+        if time.monotonic() - _stats_cache["at"] >= ttl:
+            threading.Thread(target=_refresh_stats, args=(dsn,), daemon=True).start()
+        return value
+    return _compute_stats(dsn)
+
+
+def warm_stats(dsn: str) -> None:
+    """Call at startup so the first visitor does not wait for the heavy count."""
+    threading.Thread(target=_refresh_stats, args=(dsn,), daemon=True).start()
 
 
 DETAIL_SECTIONS = {
