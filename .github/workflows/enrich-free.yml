@@ -1,0 +1,46 @@
+name: Enrich (free sources)
+# Chunk 2: BAN geocoding, ADEME RGE, BODACC, register events, directors (Annuaire). Run AFTER "Load real SIRENE data".
+# Uses the same repo secret DATABASE_URL. Every step is independent: one failing step does not stop the others.
+on:
+  workflow_dispatch:
+    inputs:
+      rge_csv_url:
+        description: "ADEME RGE CSV link (data.gouv permalink). Leave as is unless it stops working"
+        default: "https://www.data.gouv.fr/api/1/datasets/r/651ee65a-72b5-48a7-9759-6adabe7b3404"
+      days:
+        description: "BODACC / register events: how many past days to read"
+        default: "365"
+      directors_limit:
+        description: "Directors: max companies this run (16,000 = all of department 69)"
+        default: "20000"
+jobs:
+  enrich:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PYTHONPATH: src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: pip install -r requirements.txt -c constraints.txt && pip install -e . 2>/dev/null || true
+      - name: Schema (new migrations only)
+        run: bash scripts/init_db.sh
+      - name: Geocode (BAN)
+        continue-on-error: true
+        run: python -m fbdb.enrich.geocode --limit 200000
+      - name: ADEME RGE
+        continue-on-error: true
+        run: python -m fbdb.enrich.ademe_rge --download --url "${{ inputs.rge_csv_url }}"
+      - name: BODACC
+        continue-on-error: true
+        run: python -m fbdb.enrich.bodacc --days ${{ inputs.days }}
+      - name: Register events
+        continue-on-error: true
+        run: python -m fbdb.enrich.register_events --days ${{ inputs.days }}
+      - name: Directors (Annuaire)
+        continue-on-error: true
+        run: python -m fbdb.enrich.directors --limit ${{ inputs.directors_limit }}
+      - name: Database size
+        run: psql "$DATABASE_URL" -Atc "select pg_size_pretty(pg_database_size(current_database()))"
