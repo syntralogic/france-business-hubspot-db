@@ -81,7 +81,9 @@ def test_company_detail_sections_and_privacy(db):
         conn.execute("INSERT INTO company_relations (company_id, related_siren, related_name, role) VALUES (%s,'401234562','HOLDING','Président')", (cid,))
         conn.execute("INSERT INTO company_register_events (company_id, event_type, event_date, detail, basis, ref_key) "
                      "VALUES (%s,'new_establishment',current_date,'69001 LYON','sirene_creation_date','X')", (cid,))
+        conn.execute("INSERT INTO company_directors (company_id, first_name, last_name, role, birth_year) VALUES (%s,'Anne','Martin','Gérant',1980)", (cid,))
     d = api.company_detail(DSN, A)
+    assert d["directors"][0]["last_name"] == "Martin" and d["directors"][0]["role"] == "Gérant" and "birth_year" not in d["directors"][0]
     assert d["legal_name"] == "ALPHA BOULANGERIE SARL"
     assert d["financials"][0]["equity_eur"] == 250000 and d["financials"][0]["debt_eur"] == 90000
     assert d["certificates"][0]["certificate_url"] == "https://example.org/c/1" and d["certificates"][0]["has_attestation"] is False

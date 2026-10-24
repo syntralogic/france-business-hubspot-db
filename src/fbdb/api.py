@@ -147,6 +147,8 @@ def warm_stats(dsn: str) -> None:
 
 
 DETAIL_SECTIONS = {
+    "directors": ("SELECT d.first_name, d.last_name, d.role, d.start_date FROM company_directors d WHERE d.company_id = %s AND d.is_active "
+                  "ORDER BY d.start_date DESC NULLS LAST, d.last_name LIMIT 20"),   # legal directors from the register; no birth year, no contact
     "financials": ("SELECT f.fiscal_year, f.period_end, f.duration_months, f.revenue_eur, f.net_result_eur, f.equity_eur, f.cash_eur, "
                    "f.debt_eur, f.employees FROM company_financials f WHERE f.company_id = %s "
                    "ORDER BY f.fiscal_year DESC, f.period_end DESC NULLS LAST LIMIT 5"),
