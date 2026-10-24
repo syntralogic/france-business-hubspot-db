@@ -58,6 +58,8 @@ jobs:
       - name: Load (scoped)
         run: |
           python -m fbdb.load.sirene_loader --ul data/raw/StockUniteLegale_utf8.csv --etab data/raw/StockEtablissement_utf8.csv --only-active
+      - name: Refresh planner statistics
+        run: psql "$DATABASE_URL" -c "ANALYZE"
       - name: Count
         run: psql "$DATABASE_URL" -Atc "select 'companies', count(*) from companies"
       - name: Database size

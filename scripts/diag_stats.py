@@ -11,8 +11,9 @@ def timed(c, label, sql):
         p(label, "OK", round(time.time() - t, 1), "s ->", r[:3])
     except Exception as e:
         p(label, "ERR", round(time.time() - t, 1), "s", repr(e)[:200])
-with psycopg.connect(os.environ["DATABASE_URL"]) as c:
-    c.execute("SET statement_timeout=600000")
+with psycopg.connect(os.environ["DATABASE_URL"], autocommit=True) as c:
+    c.execute("SET statement_timeout=0")
+    t0 = time.time(); c.execute("ANALYZE"); p("ANALYZE done in", round(time.time() - t0, 1), "s")
     timed(c, "NEW cheap stats", STATS_SQL)
     timed(c, "first page of 25", f"SELECT v.siret {FROM} ORDER BY v.legal_name, v.siret LIMIT 25 OFFSET 0")
     timed(c, "cheap: establishments", "SELECT count(*) FROM company_addresses")
