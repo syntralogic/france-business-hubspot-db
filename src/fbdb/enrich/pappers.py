@@ -39,6 +39,7 @@ from fbdb.common import usage
 from fbdb.common.provenance import record_conflict
 
 log = logging.getLogger("fbdb.pappers")
+logging.getLogger("httpx").setLevel(logging.WARNING)   # httpx INFO logs print the full URL, which carries api_token=KEY
 BASE = os.environ.get("PAPPERS_BASE", "https://api.pappers.fr/v2/entreprise")
 DAILY_CAP = int(os.environ.get("PAPPERS_DAILY_CAP", "200"))
 CREDITS_PER_CALL = int(os.environ.get("PAPPERS_CREDITS_PER_CALL", "1"))
