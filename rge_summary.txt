@@ -1,0 +1,18 @@
+page 1 lines so far 10001
+page 2 lines so far 20001
+page 3 lines so far 30001
+page 4 lines so far 40001
+page 5 lines so far 50001
+page 6 lines so far 60001
+page 7 lines so far 70001
+page 8 lines so far 80001
+page 9 lines so far 90001
+page 10 lines so far 100001
+page 11 lines so far 110001
+page 12 lines so far 120001
+page 13 lines so far 130001
+page 14 lines so far 140001
+page 15 lines so far 150001
+page 16 lines so far 157931
+{'rows': 157930, 'matched_rows': 17897, 'establishments': 7437, 'rejected': 140033}
+157931 data/raw/rge_full.csv

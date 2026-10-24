@@ -1,0 +1,16 @@
+DATASET liste-des-entreprises-rge | Liste des entreprises RGE | org: ADEME | modified: 2026-06-30T10:19:24.164000+00:00
+  RES url None 2026-10-23T04:53:14.630667+00:00 Consultez les données https://data.ademe.fr/datasets/liste-des-entreprises-rge-2
+  RES url None 2026-10-24T03:38:58.479883+00:00 Description des champs https://data.ademe.fr/datasets/liste-des-entreprises-rge-2
+DATASET liste-des-entreprises-rge-1 | Liste des entreprises RGE | org: ADEME | modified: 2026-06-30T10:19:24.164000+00:00
+  RES url None 2026-10-23T04:53:14.630667+00:00 Consultez les données https://data.ademe.fr/datasets/liste-des-entreprises-rge-2
+  RES url None 2026-10-24T03:38:58.479883+00:00 Description des champs https://data.ademe.fr/datasets/liste-des-entreprises-rge-2
+DATASET liste-des-entreprises-rge-2 ERR HTTP Error 404: NOT FOUND
+USING https://www.data.gouv.fr/api/1/datasets/r/651ee65a-72b5-48a7-9759-6adabe7b3404
+file bytes: 14369357
+HEAD: "siret","nom_entreprise","adresse","code_postal","commune","latitude","longitude","telephone","email","site_internet","code_qualification","nom_qualification","url_qualification","nom_certificat","domaine","meta_domaine","organisme","particulier","lien_date_debut","lien_date_fin" | "82454695600023","EL ARCHITECTURE","4 RUE D'HALLENNES","59320","ENGLOS",50.622205,2.957894,"06 37 51 96 32","e.lannoyarchitecture@gmail.com","","2","Architecte sur le site faire.fr (2)","https://ws-api.architectes.org/faire/v2/attestation/S19344/fed4653f152a3c7d1a41c86cbe6feef133acb2d2/","Tableau de l´Ordre","Archit
+rows: 30000 valid siret rows: 30000 distinct siret: 13597
+establishments in DB: 88619
+file SIRET matching DB (exact): 795
+file SIREN present in DB (any establishment): 837
+file SIRET in scope depts by prefix: 892
+RGE establishments stored now: 206
