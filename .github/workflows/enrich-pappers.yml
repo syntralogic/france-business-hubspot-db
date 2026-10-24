@@ -1,0 +1,36 @@
+name: Enrich Pappers (financials)
+# PAID: every company checked costs Pappers credits. First run: limit 5 and read the report.
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Max companies this run (start with 5, then 200)"
+        default: "5"
+permissions:
+  contents: write
+jobs:
+  pappers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PAPPERS_API_KEY: ${{ secrets.PAPPERS_API_KEY }}
+      PAPPERS_DAILY_CAP: "200"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: pip install -r requirements.txt -c constraints.txt && pip install -e . 2>/dev/null || true
+      - name: Schema (new migrations only)
+        run: bash scripts/init_db.sh
+      - name: Pappers
+        run: python -m fbdb.enrich.pappers --limit ${{ inputs.limit }} 2>&1 | tee /tmp/pappers_log.txt
+      - name: Report
+        if: always()
+        run: python scripts/report_pappers.py /tmp/pappers_report.txt; tail -n 15 /tmp/pappers_log.txt >> /tmp/pappers_report.txt
+      - name: Publish report to branch diag
+        if: always()
+        run: |
+          git config user.email "ci@example.com"; git config user.name "ci"
+          git fetch -q origin diag; git checkout -q -B diag origin/diag
+          cp /tmp/pappers_report.txt pappers_report.txt; git add pappers_report.txt; git commit -qm "pappers report"; git push -q origin diag
