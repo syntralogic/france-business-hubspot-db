@@ -8,8 +8,8 @@ on:
         description: "ADEME RGE CSV link (data.gouv permalink). Leave as is unless it stops working"
         default: "https://www.data.gouv.fr/api/1/datasets/r/651ee65a-72b5-48a7-9759-6adabe7b3404"
       days:
-        description: "BODACC / register events: how many past days to read"
-        default: "365"
+        description: "BODACC / register events: how many past days to read (more = hours)"
+        default: "30"
       directors_limit:
         description: "Directors: max companies this run (16,000 = all of department 69)"
         default: "20000"
@@ -30,9 +30,11 @@ jobs:
       - name: Geocode (BAN)
         continue-on-error: true
         run: python -m fbdb.enrich.geocode --limit 200000
-      - name: ADEME RGE
+      - name: ADEME RGE (full list)
         continue-on-error: true
-        run: python -m fbdb.enrich.ademe_rge --download --url "${{ inputs.rge_csv_url }}"
+        run: |
+          mkdir -p data/raw && python scripts/fetch_rge.py data/raw/rge_full.csv
+          python -m fbdb.enrich.ademe_rge data/raw/rge_full.csv --rejects /tmp/rge_rejects.csv
       - name: BODACC
         continue-on-error: true
         run: python -m fbdb.enrich.bodacc --days ${{ inputs.days }}
