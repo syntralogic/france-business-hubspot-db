@@ -109,7 +109,7 @@ SELECT count(*) AS establishments, count(DISTINCT c.siren) AS companies,
     OR a.establishment_id IN (SELECT k.establishment_id FROM company_contacts k WHERE k.contact_type = 'website'
                         AND k.value_status IN ('verified','sourced') AND k.establishment_id IS NOT NULL)) AS with_website
 FROM company_addresses a JOIN companies c ON c.company_id = a.company_id
-WHERE NOT c.is_sole_proprietor AND a.status = 'active'
+WHERE NOT c.is_sole_proprietor AND a.status = 'active' AND c.is_diffusible AND a.is_diffusible   -- same filters as the view
 """
 
 
