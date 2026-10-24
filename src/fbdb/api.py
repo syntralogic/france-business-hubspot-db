@@ -99,13 +99,15 @@ _stats_lock = threading.Lock()
 STATS_SQL = """
 SELECT count(*) AS establishments, count(DISTINCT c.siren) AS companies,
   count(*) FILTER (WHERE
-       EXISTS (SELECT 1 FROM company_certifications x WHERE x.establishment_id = a.establishment_id AND x.cert_type = 'RGE'
-               AND (x.valid_to IS NULL OR x.valid_to >= current_date))
-    OR EXISTS (SELECT 1 FROM company_certifications x WHERE x.company_id = c.company_id
-               AND (x.valid_to IS NULL OR x.valid_to >= current_date))) AS rge_certified,
-  count(*) FILTER (WHERE EXISTS (SELECT 1 FROM company_contacts k WHERE k.company_id = c.company_id
-               AND (k.establishment_id = a.establishment_id OR k.establishment_id IS NULL)
-               AND k.contact_type = 'website' AND k.value_status IN ('verified','sourced'))) AS with_website
+       a.establishment_id IN (SELECT x.establishment_id FROM company_certifications x WHERE x.cert_type = 'RGE'
+                              AND x.establishment_id IS NOT NULL AND (x.valid_to IS NULL OR x.valid_to >= current_date))
+    OR c.company_id IN (SELECT x.company_id FROM company_certifications x
+                        WHERE x.valid_to IS NULL OR x.valid_to >= current_date)) AS rge_certified,
+  count(*) FILTER (WHERE
+       c.company_id IN (SELECT k.company_id FROM company_contacts k WHERE k.contact_type = 'website'
+                        AND k.value_status IN ('verified','sourced') AND k.establishment_id IS NULL)
+    OR a.establishment_id IN (SELECT k.establishment_id FROM company_contacts k WHERE k.contact_type = 'website'
+                        AND k.value_status IN ('verified','sourced') AND k.establishment_id IS NOT NULL)) AS with_website
 FROM company_addresses a JOIN companies c ON c.company_id = a.company_id
 WHERE NOT c.is_sole_proprietor AND a.status = 'active'
 """

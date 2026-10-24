@@ -14,7 +14,6 @@ def timed(c, label, sql):
 with psycopg.connect(os.environ["DATABASE_URL"]) as c:
     c.execute("SET statement_timeout=600000")
     timed(c, "NEW cheap stats", STATS_SQL)
-    timed(c, "view stats (old query, for comparison)", f"SELECT count(*) AS e, count(DISTINCT v.siren) AS c, count(*) FILTER (WHERE v.rge_labels IS NOT NULL OR v.certifications IS NOT NULL) AS rge, count(*) FILTER (WHERE v.website IS NOT NULL) AS web {FROM}")
     timed(c, "first page of 25", f"SELECT v.siret {FROM} ORDER BY v.legal_name, v.siret LIMIT 25 OFFSET 0")
     timed(c, "cheap: establishments", "SELECT count(*) FROM company_addresses")
     timed(c, "cheap: rge establishments", "SELECT count(DISTINCT establishment_id) FROM company_certifications WHERE cert_type='RGE'")
