@@ -159,6 +159,7 @@ def load(ul_path: Path, etab_path: Path, only_active: bool, dsn: str, scope: Sco
 
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
+            cur.execute("SET statement_timeout = 0")  # hosted DBs (Supabase) kill long statements; bulk COPY/upsert must run to the end
             cur.execute(
                 "INSERT INTO import_export_batches (batch_type, source_id) "
                 "SELECT 'import', source_id FROM data_sources WHERE code = 'sirene' RETURNING batch_id"
