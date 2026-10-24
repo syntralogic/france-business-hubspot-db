@@ -1,0 +1,29 @@
+name: Count SIRENE file
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  count:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      UL_URL: https://www.data.gouv.fr/api/1/datasets/r/825f4199-cadd-486c-ac46-a65a8ea1a047
+      ETAB_URL: https://www.data.gouv.fr/api/1/datasets/r/0651fb76-bcf3-4f6a-a38d-bc04fa708576
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Download
+        run: |
+          mkdir -p data/raw
+          curl -fSL --retry 10 --retry-all-errors --retry-delay 20 -o data/raw/ul.zip "$UL_URL"
+          curl -fSL --retry 10 --retry-all-errors --retry-delay 20 -o data/raw/et.zip "$ETAB_URL"
+          unzip -oq data/raw/ul.zip -d data/raw && unzip -oq data/raw/et.zip -d data/raw && rm data/raw/*.zip
+      - run: python scripts/diag_sirene_counts.py /tmp/sirene_counts.txt
+      - name: Publish report
+        if: always()
+        run: |
+          git config user.email "ci@example.com"; git config user.name "ci"
+          git fetch -q origin diag; git checkout -q -B diag origin/diag
+          cp /tmp/sirene_counts.txt sirene_counts.txt; git add sirene_counts.txt; git commit -qm "sirene counts"; git push -q origin diag
