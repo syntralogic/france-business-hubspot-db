@@ -147,6 +147,10 @@ def warm_stats(dsn: str) -> None:
 
 
 DETAIL_SECTIONS = {
+    "legal": ("SELECT l.share_capital_eur, l.vat_number, l.rcs_number, l.rcs_registry, l.rcs_status, l.rcs_registered_on, l.corporate_purpose, "
+              "l.exercise_forms, l.collective_agreements, l.fiscal_year_end, l.next_closing_date FROM company_legal_info l WHERE l.company_id = %s"),
+    "documents": ("SELECT d.kind, d.doc_date, d.label, d.available FROM company_documents d WHERE d.company_id = %s "
+                  "ORDER BY d.doc_date DESC NULLS LAST, d.kind LIMIT 20"),   # metadata only: no download link or token is ever exposed
     "directors": ("SELECT d.first_name, d.last_name, d.role, d.start_date FROM company_directors d WHERE d.company_id = %s AND d.is_active "
                   "ORDER BY d.start_date DESC NULLS LAST, d.last_name LIMIT 20"),   # legal directors from the register; no birth year, no contact
     "financials": ("SELECT f.fiscal_year, f.period_end, f.duration_months, f.revenue_eur, f.net_result_eur, f.equity_eur, f.cash_eur, "

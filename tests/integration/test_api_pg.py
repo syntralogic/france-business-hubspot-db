@@ -82,7 +82,11 @@ def test_company_detail_sections_and_privacy(db):
         conn.execute("INSERT INTO company_register_events (company_id, event_type, event_date, detail, basis, ref_key) "
                      "VALUES (%s,'new_establishment',current_date,'69001 LYON','sirene_creation_date','X')", (cid,))
         conn.execute("INSERT INTO company_directors (company_id, first_name, last_name, role, birth_year) VALUES (%s,'Anne','Martin','Gérant',1980)", (cid,))
+        conn.execute("INSERT INTO company_legal_info (company_id, share_capital_eur, vat_number, rcs_number, corporate_purpose, commercial_opposition) VALUES (%s, 7000, 'FR61492892195', '492 892 195 R.C.S. Marseille', 'PLATRERIE', TRUE)", (cid,))
+        conn.execute("INSERT INTO company_documents (company_id, kind, doc_date, label, available) VALUES (%s, 'accounts', '2025-12-31', 'C', TRUE)", (cid,))
     d = api.company_detail(DSN, A)
+    assert d["legal"][0]["vat_number"] == "FR61492892195" and float(d["legal"][0]["share_capital_eur"]) == 7000 and "commercial_opposition" not in d["legal"][0]
+    assert d["documents"][0]["kind"] == "accounts" and set(d["documents"][0]) == {"kind", "doc_date", "label", "available"}
     assert d["directors"][0]["last_name"] == "Martin" and d["directors"][0]["role"] == "Gérant" and "birth_year" not in d["directors"][0]
     assert d["legal_name"] == "ALPHA BOULANGERIE SARL"
     assert d["financials"][0]["equity_eur"] == 250000 and d["financials"][0]["debt_eur"] == 90000
@@ -94,3 +98,17 @@ def test_company_detail_sections_and_privacy(db):
     assert api.company_detail(DSN, C) is None and api.company_detail(DSN, B) is None and api.company_detail(DSN, "12") is None   # EI, non-diffusible
     assert api.DbApi(DSN).handle("/api/company", {"siren": [A]})[0] == 200
     assert api.DbApi(DSN).handle("/api/company", {"siren": ["999999999"]})[0] == 404
+
+
+def test_pappers_store_legal_is_idempotent(db):
+    from fbdb.enrich import pappers
+    with psycopg.connect(DSN, autocommit=True) as conn:
+        cid = conn.execute("SELECT company_id FROM companies WHERE siren = %s", (A,)).fetchone()[0]
+        sid = conn.execute("SELECT source_id FROM data_sources WHERE code='pappers'").fetchone()[0]
+        legal = {"share_capital_eur": 7000.0, "vat_number": "FR1", "rcs_number": "R", "rcs_registry": "M", "rcs_status": "Inscrit", "rcs_registered_on": None,
+                 "corporate_purpose": "P", "exercise_forms": None, "collective_agreements": None, "fiscal_year_end": "31 Décembre", "next_closing_date": None, "commercial_opposition": False}
+        docs = [{"kind": "accounts", "doc_date": None, "label": None, "available": True}]
+        for _ in range(2):
+            pappers.store_legal(conn, cid, legal, docs, sid)
+        assert conn.execute("SELECT count(*) FROM company_legal_info WHERE company_id=%s", (cid,)).fetchone()[0] == 1
+        assert conn.execute("SELECT count(*) FROM company_documents WHERE company_id=%s", (cid,)).fetchone()[0] == 1

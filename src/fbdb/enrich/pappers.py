@@ -189,6 +189,50 @@ def store(conn, company_id: int, rows: list[dict], source_id: int, source_url: O
     return {"stored": stored, "conflicts": conflicts}
 
 
+def _text(v) -> Optional[str]:
+    v = (str(v).strip() if v is not None else "")
+    return v or None
+
+
+def parse_legal(payload: dict) -> tuple[dict, list[dict]]:
+    """Company-level legal sheet fields and document metadata (no download tokens) from the same /entreprise response."""
+    agreements = "; ".join(f"{c.get('nom')} (IDCC {c.get('idcc')})" for c in payload.get("conventions_collectives") or [] if c.get("nom"))
+    legal = {
+        "share_capital_eur": _num(payload.get("capital")), "vat_number": _text(payload.get("numero_tva_intracommunautaire")),
+        "rcs_number": _text(payload.get("numero_rcs")), "rcs_registry": _text(payload.get("greffe")),
+        "rcs_status": _text(payload.get("statut_rcs")), "rcs_registered_on": _date(payload.get("date_immatriculation_rcs")),
+        "corporate_purpose": _text(payload.get("objet_social")), "exercise_forms": _text(", ".join(payload.get("formes_exercice") or [])),
+        "collective_agreements": _text(agreements), "fiscal_year_end": _text(payload.get("date_cloture_exercice")),
+        "next_closing_date": _date(payload.get("prochaine_date_cloture_exercice")),
+        "commercial_opposition": payload.get("opposition_utilisation_commerciale") if isinstance(payload.get("opposition_utilisation_commerciale"), bool) else None,
+    }
+    docs: list[dict] = []
+    st = payload.get("derniers_statuts")
+    if isinstance(st, dict) and (st.get("date_acte") or st.get("disponible") is not None):
+        docs.append({"kind": "statutes", "doc_date": _date(st.get("date_acte")), "label": _text(st.get("type")), "available": bool(st.get("disponible"))})
+    for c in (payload.get("comptes") or [])[:6]:
+        docs.append({"kind": "accounts", "doc_date": _date(c.get("date_cloture")), "label": _text(c.get("type_comptes")), "available": bool(c.get("disponible"))})
+    for a in (payload.get("depots_actes") or [])[:10]:
+        kinds = sorted({str(x.get("type") or x.get("decision") or "").strip() for x in (a.get("actes") or []) if isinstance(x, dict)} - {""})
+        docs.append({"kind": "act", "doc_date": _date(a.get("date_depot")), "label": _text(", ".join(kinds)), "available": bool(a.get("disponible"))})
+    if isinstance(payload.get("extrait_immatriculation"), dict):
+        docs.append({"kind": "registration_extract", "doc_date": None, "label": None, "available": True})
+    return legal, docs
+
+
+def store_legal(conn, company_id: int, legal: dict, docs: list[dict], source_id: int) -> None:
+    cols = list(legal)
+    conn.execute(
+        f"INSERT INTO company_legal_info (company_id, {', '.join(cols)}, source_id) VALUES (%s, {', '.join(['%s'] * len(cols))}, %s) "
+        f"ON CONFLICT (company_id) DO UPDATE SET {', '.join(f'{c} = EXCLUDED.{c}' for c in cols)}, source_id = EXCLUDED.source_id, collected_at = now()",
+        [company_id, *legal.values(), source_id])
+    for d in docs:
+        conn.execute(
+            "INSERT INTO company_documents (company_id, kind, doc_date, label, available, source_id) VALUES (%s,%s,%s,%s,%s,%s) "
+            "ON CONFLICT (company_id, kind, COALESCE(doc_date, DATE '1900-01-01'), COALESCE(label, '')) DO UPDATE SET available = EXCLUDED.available, collected_at = now()",
+            (company_id, d["kind"], d["doc_date"], d["label"], d["available"], source_id))
+
+
 def set_status(conn, company_id: int, status: str, detail: str, source_id: int, exercises: int = 0) -> None:
     conn.execute(
         """INSERT INTO financials_checks (company_id, status, detail, exercises_found, source_id) VALUES (%s,%s,%s,%s,%s)
@@ -239,6 +283,8 @@ def run(dsn: str, client=None, limit: int = 200, refresh_days: int = 180, cap: i
             else:
                 rows = parse_finances(payload)
                 res = store(conn, company_id, rows, source_id, f"{BASE}?siren={siren}")
+                legal, docs = parse_legal(payload)
+                store_legal(conn, company_id, legal, docs, source_id)
                 conn.execute("UPDATE companies SET financials_checked_at=now() WHERE company_id=%s", (company_id,))
                 stats["conflicts"] += res["conflicts"]
                 if rows:

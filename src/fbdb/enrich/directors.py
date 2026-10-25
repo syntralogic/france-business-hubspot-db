@@ -32,6 +32,7 @@ SELECT_DUE = """
 SELECT company_id, siren FROM companies
 WHERE status = 'active' AND is_diffusible AND NOT is_sole_proprietor
   AND (directors_checked_at IS NULL OR directors_checked_at < now() - make_interval(days => %(days)s))
+  AND (%(shards)s = 1 OR company_id %% %(shards)s = %(shard)s)   -- parallel workers take disjoint slices
 ORDER BY directors_checked_at NULLS FIRST, company_id
 LIMIT %(limit)s
 """
@@ -88,7 +89,7 @@ def refresh_company(cur, company_id: int, mapped: list[dict], source_id: int, ba
     return added, removed
 
 
-def run(dsn: str, client=None, limit: int = 5000, refresh_days: int = 30) -> dict:
+def run(dsn: str, client=None, limit: int = 5000, refresh_days: int = 30, shards: int = 1, shard: int = 0) -> dict:
     client = client or AnnuaireClient()
     stats = {"read": 0, "added": 0, "removed": 0, "updated": 0, "unchanged": 0, "not_found": 0, "errors": 0, "relations_changed": 0}
     with psycopg.connect(dsn) as conn, conn.cursor() as cur:
@@ -100,7 +101,7 @@ def run(dsn: str, client=None, limit: int = 5000, refresh_days: int = 30) -> dic
         )
         batch_id = cur.fetchone()[0]
         conn.commit()
-        cur.execute(SELECT_DUE, {"days": refresh_days, "limit": limit})
+        cur.execute(SELECT_DUE, {"days": refresh_days, "limit": limit, "shards": shards, "shard": shard})
         due = cur.fetchall()
         consecutive_errors = 0
         status, note = "success", None
@@ -151,9 +152,11 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=5000, help="max companies checked per run")
     ap.add_argument("--refresh-days", type=int, default=30, help="re-check companies not checked for N days")
+    ap.add_argument("--shard", default="0/1", help="i/n: this worker takes companies with company_id %% n == i (run n workers in parallel)")
     args = ap.parse_args()
+    shard, shards = (int(x) for x in args.shard.split("/"))
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    print(run(os.environ["DATABASE_URL"], limit=args.limit, refresh_days=args.refresh_days))
+    print(run(os.environ["DATABASE_URL"], limit=args.limit, refresh_days=args.refresh_days, shards=shards, shard=shard))
 
 
 if __name__ == "__main__":

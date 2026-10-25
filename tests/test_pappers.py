@@ -1,3 +1,4 @@
+from fbdb.enrich import pappers
 from fbdb.enrich.pappers import parse_finances
 
 
@@ -44,3 +45,21 @@ def test_parse_finances_balance_sheet_aliases_and_nothing_invented():
     assert (by[2022]["equity"], by[2022]["cash"], by[2022]["debt"]) == (-2000, 30, 900)
     assert by[2021]["cash"] == 12 and by[2021]["equity"] is None and by[2021]["debt"] is None   # missing = None, never 0
     assert 2020 not in by and by[2019]["equity"] is None
+
+
+def test_parse_legal_extracts_sheet_fields_and_document_metadata_without_tokens():
+    payload = {"capital": 7000, "numero_tva_intracommunautaire": "FR61492892195", "numero_rcs": "492 892 195 R.C.S. Marseille",
+               "greffe": "MARSEILLE", "statut_rcs": "Inscrit", "date_immatriculation_rcs": "2006-11-21", "objet_social": "PLATRERIE",
+               "formes_exercice": ["Artisanale non réglementée", "Artisanale réglementée"], "date_cloture_exercice": "31 Décembre",
+               "prochaine_date_cloture_exercice": "2026-12-31", "opposition_utilisation_commerciale": True,
+               "conventions_collectives": [{"nom": "Bâtiment", "idcc": "2420"}],
+               "derniers_statuts": {"date_acte": "2020-01-02", "disponible": True, "token": "SECRET", "type": "Statuts"},
+               "comptes": [{"date_cloture": "2025-12-31", "disponible": True, "type_comptes": "C", "token": "SECRET"}],
+               "depots_actes": [{"date_depot": "2022-05-05", "disponible": False, "actes": [{"type": "Modification"}], "token": "SECRET"}],
+               "extrait_immatriculation": {"token": "SECRET"}}
+    legal, docs = pappers.parse_legal(payload)
+    assert legal["share_capital_eur"] == 7000 and legal["vat_number"] == "FR61492892195" and legal["rcs_registry"] == "MARSEILLE"
+    assert legal["exercise_forms"] == "Artisanale non réglementée, Artisanale réglementée" and legal["collective_agreements"] == "Bâtiment (IDCC 2420)"
+    assert legal["commercial_opposition"] is True and str(legal["next_closing_date"]) == "2026-12-31"
+    assert [d["kind"] for d in docs] == ["statutes", "accounts", "act", "registration_extract"]
+    assert "SECRET" not in str(docs) and docs[2]["label"] == "Modification" and docs[2]["available"] is False
