@@ -1,0 +1,21 @@
+name: Coverage report
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  c:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: pip install -r requirements.txt -c constraints.txt
+      - run: python scripts/diag_coverage.py /tmp/coverage.txt
+      - name: Publish
+        if: always()
+        run: |
+          git config user.email "ci@example.com"; git config user.name "ci"
+          git fetch -q origin diag; git checkout -q -B diag origin/diag
+          cp /tmp/coverage.txt coverage.txt; git add coverage.txt; git commit -qm "coverage"; git push -q origin diag
