@@ -22,6 +22,25 @@ jobs:
       - run: pip install -r requirements.txt -c constraints.txt && pip install -e . 2>/dev/null || true
       - name: Export
         run: python -m fbdb.export.run_export --out data/exports ${{ inputs.siret_is_import_key == 'yes' && '--siret-is-import-key' || '' }} 2>&1 | tee /tmp/export_log.txt
+      - name: Test sample and fill rates
+        run: |
+          python - <<'PY' | tee /tmp/fill_rates.txt
+          import csv, glob, random
+          f = sorted(glob.glob("data/exports/hubspot_companies_*part*.csv"))[0]
+          rows = list(csv.DictReader(open(f, encoding="utf-8")))
+          n = len(rows)
+          print(f"rows: {n}, distinct SIRET: {len({r['SIRET'] for r in rows})}")
+          print("fill rate per column (non-empty / rows):")
+          for c in rows[0].keys():
+              k = sum(1 for r in rows if (r[c] or "").strip())
+              print(f"  {c:<34} {k:>7}  {100*k/n:5.1f}%")
+          random.seed(7)
+          sample = random.sample([r for r in rows if r["Forme juridique"] and "individuel" not in r["Forme juridique"].lower()], 100)
+          import os; os.makedirs("data/exports", exist_ok=True)
+          w = csv.DictWriter(open("data/exports/hubspot_TEST_100_rows.csv", "w", newline="", encoding="utf-8"), fieldnames=list(rows[0].keys()))
+          w.writeheader(); w.writerows(sample)
+          print("wrote hubspot_TEST_100_rows.csv (100 random companies that are not sole proprietors)")
+          PY
       - name: Metrics
         continue-on-error: true
         run: python -m fbdb.report.metrics --out reports/metrics --target-rows 500000 2>&1 | tail -n 40 | tee /tmp/metrics_log.txt
@@ -29,7 +48,7 @@ jobs:
         if: always()
         run: |
           { echo "== files"; ls -l data/exports 2>/dev/null; echo "== lines per file"; wc -l data/exports/*.csv 2>/dev/null;
-            echo "== result"; tail -n 3 /tmp/export_log.txt; echo "== metrics"; cat /tmp/metrics_log.txt 2>/dev/null;
+            echo "== result"; tail -n 3 /tmp/export_log.txt; echo "== error report"; cat data/exports/hubspot_errors_*.csv 2>/dev/null | cut -c1-300; echo "== fill rates"; cat /tmp/fill_rates.txt 2>/dev/null; echo "== metrics"; cat /tmp/metrics_log.txt 2>/dev/null;
             echo "== first rows (company data only)"; head -n 4 $(ls data/exports/hubspot_companies_*part*.csv 2>/dev/null | head -1) 2>/dev/null | cut -c1-700; } > /tmp/export_summary.txt
       - uses: actions/upload-artifact@v4
         if: always()

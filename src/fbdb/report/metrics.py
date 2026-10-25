@@ -87,6 +87,7 @@ def render_report(m: dict, rows: list[dict], today: Optional[date] = None) -> st
 
 def collect(dsn: str, threshold_note: float = 0.6, target_rows: int = 500_000) -> tuple[dict, dict[str, float]]:
     with psycopg.connect(dsn) as conn:
+        conn.execute("SET statement_timeout = 0")   # the counts run over the heavy export view
         active = conn.execute("SELECT count(*) FROM company_addresses WHERE status='active'").fetchone()[0]
         cols = [d.name for d in conn.execute("SELECT * FROM v_hubspot_companies LIMIT 0").description if d.name not in SKIP_COLUMNS]
         selects = [sql.SQL("count(*)")] + [
