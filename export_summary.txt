@@ -1,0 +1,31 @@
+== files
+total 66712
+-rw-r--r-- 1 runner runner 68305394 Oct 25 10:21 hubspot_companies_2026-10-25_part01.csv
+-rw-r--r-- 1 runner runner      350 Oct 25 10:21 hubspot_errors_2026-10-25.csv
+== lines per file
+  203667 data/exports/hubspot_companies_2026-10-25_part01.csv
+       4 data/exports/hubspot_errors_2026-10-25.csv
+  203671 total
+== result
+2026-10-25 10:21:23,850 INFO fbdb.export Export finished: {'exported': 203666, 'rejected': 0, 'warnings': 3, 'files': ['data/exports/hubspot_companies_2026-10-25_part01.csv'], 'error_report': 'data/exports/hubspot_errors_2026-10-25.csv'}
+{'exported': 203666, 'rejected': 0, 'warnings': 3, 'files': ['data/exports/hubspot_companies_2026-10-25_part01.csv'], 'error_report': 'data/exports/hubspot_errors_2026-10-25.csv'}
+== metrics
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/runner/work/france-business-hubspot-db/france-business-hubspot-db/src/fbdb/report/metrics.py", line 222, in <module>
+    main()
+  File "/home/runner/work/france-business-hubspot-db/france-business-hubspot-db/src/fbdb/report/metrics.py", line 214, in main
+    m, rates = collect(os.environ["DATABASE_URL"], target_rows=a.target_rows)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/france-business-hubspot-db/france-business-hubspot-db/src/fbdb/report/metrics.py", line 94, in collect
+    row = conn.execute(sql.SQL("SELECT {} FROM v_hubspot_companies WHERE status='active'").format(sql.SQL(", ").join(selects))).fetchone()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/psycopg/connection.py", line 304, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.QueryCanceled: canceling statement due to statement timeout
+== first rows (company data only)
+Company name,Company domain name,Phone Number,Street Address,Street Address 2,City,State/Region,Postal Code,Country/Region,Website URL,LinkedIn Company Page,Number of Employees,Annual Revenue,SIRET,SIREN,Raison sociale,Code NAF,Libelle NAF,Metier,Forme juridique,Siege,Statut etablissement,Date creation,Date cloture,Departement code,Departement,Region,Categorie taille,Tranche effectifs,Annee CA,Certifications,RGE qualifications,RGE valide jusqu au,Dirigeant prenom,Dirigeant nom,Dirigeant fonction,Email professionnel,Statut email,Statut telephone,Source contact,Source principale,Date verification,Score confiance,Fraicheur donnees,Note Google,Nombre avis Google,URL Google,ID interne
+BLANC RENE,,,IMPASSE DE DOUVILLE,,PUGET-VILLE,Provence-Alpes-Côte d'Azur,83390,France,,,,,00634188700039,006341887,RENE BLANC,01.21Z,,,Entrepreneur individuel,false,active,2002-01-01,,83,Var,Provence-Alpes-Côte d'Azur,PME,Unité non employeuse,,,,,,,,,unavailable,,,sirene,,,fresh,,,,88620
+SARL UVERNET BACHELARD,,,2 TRAVERSE DES CYPRES,,MARSEILLE,Provence-Alpes-Côte d'Azur,13013,France,,,,,00695018200029,006950182,SARL UVERNET BACHELARD,41.10A,,,SARL (société à responsabilité limitée),true,active,1978-11-20,,13,Bouches-du-Rhône,Provence-Alpes-Côte d'Azur,PME,Unité non employeuse,,,,,Michel Desire,BERTHE,Gérant,,unavailable,,,sirene,,,fresh,,,,88621
+ENTREPRISE MINETTO,,,ZAC DE NICOPOLIS,,BRIGNOLES,Provence-Alpes-Côte d'Azur,83170,France,,,,,00735020000031,007350200,ENTREPRISE MINETTO,43.12B,,,SAS (société par actions simplifiée),false,active,1999-04-01,,83,Var,Provence-Alpes-Côte d'Azur,PME,50 à 99 salariés,,,,,Laurent,PEYRE,Commissaire aux comptes suppléant,,unavailable,,,sirene,,,fresh,,,,88622
