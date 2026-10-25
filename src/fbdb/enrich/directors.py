@@ -23,6 +23,7 @@ import psycopg
 
 from fbdb.enrich.annuaire import AnnuaireClient, map_dirigeants, map_legal_entity_officers
 from fbdb.enrich.company_relations import refresh_relations
+from fbdb.enrich.pappers import store as store_financials
 
 log = logging.getLogger("fbdb.directors")
 MAX_CONSECUTIVE_ERRORS = 20
@@ -36,6 +37,24 @@ WHERE status = 'active' AND is_diffusible AND NOT is_sole_proprietor
 ORDER BY directors_checked_at NULLS FIRST, company_id
 LIMIT %(limit)s
 """
+
+
+def annuaire_finances(result: dict) -> list[dict]:
+    """Free revenue / net result per year from the same Annuaire response (only some companies have them). A revenue of 0 is the
+    Annuaire's way of saying 'not published', so it is dropped rather than stored as a real zero."""
+    rows = []
+    for year, v in (result.get("finances") or {}).items():
+        try:
+            y = int(year)
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(v, dict):
+            continue
+        ca, net = v.get("ca") or None, v.get("resultat_net")
+        if ca is None and net is None:
+            continue
+        rows.append({"year": y, "period_end": None, "duration_months": None, "revenue": ca, "net_result": net, "employees": None})
+    return rows
 
 
 def _label(last: str, first: str, role: str) -> str:
@@ -125,6 +144,9 @@ def run(dsn: str, client=None, limit: int = 5000, refresh_days: int = 30, shards
                 added, removed = refresh_company(cur, company_id, map_dirigeants(result), source_id, batch_id)
                 stats["added"] += added
                 stats["removed"] += removed
+                fin = annuaire_finances(result)
+                if fin:
+                    store_financials(conn, company_id, fin, source_id, None)
                 stats["relations_changed"] += refresh_relations(cur, company_id, map_legal_entity_officers(result), source_id, batch_id)
                 if added or removed:
                     stats["updated"] += 1
