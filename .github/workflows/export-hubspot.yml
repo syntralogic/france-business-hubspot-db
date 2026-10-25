@@ -1,0 +1,47 @@
+name: Export HubSpot CSV
+# Streams the export view into HubSpot-ready CSV files (UTF-8, <=1M rows per file) + an error report, and a coverage metrics report.
+# Download them from the run page: Artifacts -> hubspot-export (kept 3 days). Never contains phone/email unless they were collected and are allowed.
+on:
+  workflow_dispatch:
+    inputs:
+      siret_is_import_key:
+        description: "yes only if the HubSpot import uses the unique custom property SIRET as identifier"
+        default: "no"
+permissions:
+  contents: write
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: pip install -r requirements.txt -c constraints.txt && pip install -e . 2>/dev/null || true
+      - name: Export
+        run: python -m fbdb.export.run_export --out data/exports ${{ inputs.siret_is_import_key == 'yes' && '--siret-is-import-key' || '' }} 2>&1 | tee /tmp/export_log.txt
+      - name: Metrics
+        continue-on-error: true
+        run: python -m fbdb.report.metrics --out reports/metrics --target-rows 500000 2>&1 | tail -n 40 | tee /tmp/metrics_log.txt
+      - name: Summary
+        if: always()
+        run: |
+          { echo "== files"; ls -l data/exports 2>/dev/null; echo "== lines per file"; wc -l data/exports/*.csv 2>/dev/null;
+            echo "== result"; tail -n 3 /tmp/export_log.txt; echo "== metrics"; cat /tmp/metrics_log.txt 2>/dev/null;
+            echo "== first rows (company data only)"; head -n 4 $(ls data/exports/hubspot_companies_*part*.csv 2>/dev/null | head -1) 2>/dev/null | cut -c1-700; } > /tmp/export_summary.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hubspot-export
+          path: |
+            data/exports
+            reports/metrics
+          retention-days: 3
+      - name: Publish summary to branch diag
+        if: always()
+        run: |
+          git config user.email "ci@example.com"; git config user.name "ci"
+          git fetch -q origin diag; git checkout -q -B diag origin/diag
+          cp /tmp/export_summary.txt export_summary.txt; git add export_summary.txt; git commit -qm "export summary"; git push -q origin diag

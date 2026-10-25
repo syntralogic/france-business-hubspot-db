@@ -28,6 +28,7 @@ def main() -> None:
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+        conn.execute("SET statement_timeout = 0")   # hosted databases (Supabase) cut long statements; the export streams the whole view
         with conn.cursor(name="export_cur", row_factory=dict_row) as cur:  # server-side cursor: constant memory
             cur.itersize = 20_000
             cur.execute("SELECT * FROM v_hubspot_companies ORDER BY siren, is_head_office DESC, siret")
