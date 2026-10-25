@@ -1,0 +1,85 @@
+siren: 492892195
+siren_formate: 492 892 195
+diffusable: True
+opposition_utilisation_commerciale: True
+denomination: 'BEN DAAS SYSTEME ISOLATION ''B.S.I.'
+nom_entreprise: 'BEN DAAS SYSTEME ISOLATION ''B.S.I.'
+personne_morale: True
+sigle: None
+nom: None
+prenom: None
+prenoms: list[0] first=None
+sexe: None
+siege: dict keys=['adresse_ligne_1', 'adresse_ligne_2', 'annee_effectif', 'code_naf', 'code_naf_2025', 'code_pays', 'code_postal', 'complement_adresse', 'date_cessation', 'date_de_creation', 'dernier_numero_voie', 'diffusion_partielle', 'domiciliation', 'effectif', 'effectif_max', 'effectif_min', 'enseigne', 'etablissement_cesse', 'etablissement_employeur', 'indice_repetition', 'latitude', 'libelle_code_naf', 'libelle_voie', 'longitude', 'nic', 'nom_commercial', 'numero_voie', 'pays', 'predecesseurs', 'siege']
+rnm: None
+code_nafa: 43.31ZB
+code_naf: 43.31Z
+code_naf_2025: 43.31Y
+libelle_code_naf: Travaux de plâtrerie
+domaine_activite: Travaux de construction spécialisés
+objet_social: L EXPLOITATION DE TOUT FONDS DE COMMERCE DE PLATRERIE POSE DE PLAQUE D…
+activites_rne: list[2] keys=['description']
+conventions_collectives: list[1] keys=['confirmee', 'idcc', 'nom', 'pourcentage']
+date_creation: 2006-10-01
+date_creation_formate: 01/10/2006
+entreprise_cessee: False
+date_cessation: None
+date_cessation_formate: None
+associe_unique: False
+categorie_juridique: 5710
+forme_juridique: SAS, société par actions simplifiée
+forme_exercice: Artisanale non réglementée
+formes_exercice: list[2] first=Artisanale non réglementée
+entreprise_employeuse: True
+societe_a_mission: False
+qualite_artisan: None
+effectif: Entre 3 et 5 salariés
+effectif_min: 3
+effectif_max: 5
+annee_effectif: 2022
+tranche_effectif: 02
+annee_tranche_effectif: 2022
+capital: 7000
+capital_actuel_si_variable: None
+devise_capital: Euro
+capital_formate: 7 000,00 Euro
+date_cloture_exercice: 31 Décembre
+date_cloture_exercice_exceptionnelle: None
+prochaine_date_cloture_exercice: 2026-12-31
+prochaine_date_cloture_exercice_formate: 31/12/2026
+economie_sociale_solidaire: False
+duree_personne_morale: 99
+derniere_mise_a_jour_sirene: 2025-09-11
+derniere_mise_a_jour_rcs: 2026-10-17
+derniere_mise_a_jour_rne: 2026-10-17
+dernier_traitement: 2024-03-22
+date_debut_activite: 2006-10-01
+date_debut_premiere_activite: 2006-10-01
+statut_rcs: Inscrit
+greffe: MARSEILLE
+code_greffe: 1303
+numero_rcs: 492 892 195 R.C.S. Marseille
+date_immatriculation_rcs: 2006-11-21
+date_premiere_immatriculation_rcs: 2006-11-21
+date_radiation_rcs: None
+statut_rne: Inscrit
+date_immatriculation_rne: 2006-11-21
+date_radiation_rne: None
+numero_tva_intracommunautaire: FR61492892195
+etablissements: list[1] keys=['adresse_ligne_1', 'adresse_ligne_2', 'annee_effectif', 'code_naf', 'code_naf_2025', 'code_pays', 'code_postal', 'complement_adresse', 'date_cessation', 'date_de_creation', 'dernier_numero_voie', 'diffusion_partielle', 'domiciliation', 'effectif', 'effectif_max', 'effectif_min', 'enseigne', 'etablissement_cesse', 'etablissement_employeur', 'indice_repetition', 'latitude', 'libelle_code_naf', 'libelle_voie', 'longitude', 'nic', 'nom_commercial', 'numero_voie', 'pays', 'predecesseurs', 'siege', 'siret', 'siret_formate', 'tranche_effectif', 'type_etablissement', 'type_voie', 'ville']
+date_reouverture: None
+statut_consolide: actif
+date_cessation_activite_consolidee: None
+finances: list[4] keys=['BFR', 'BFR_exploitation', 'BFR_exploitation_jours_CA', 'BFR_hors_exploitation', 'BFR_hors_exploitation_jours_CA', 'BFR_jours_CA', 'annee', 'autonomie_financiere', 'capacite_autofinancement', 'capacite_autofinancement_CA', 'capacite_remboursement', 'chiffre_affaires', 'chiffre_affaires_export', 'couverture_BFR', 'couverture_dettes', 'date_de_cloture_exercice', 'delai_paiement_clients_jours', 'delai_paiement_fournisseurs_jours', 'dettes_financieres', 'duree_exercice', 'effectif', 'etat_dettes_1_an_au_plus', 'excedent_brut_exploitation', 'fonds_propres', 'fonds_roulement_net_global', 'impots_taxes', 'liquidite_generale', 'marge_brute', 'marge_nette', 'ratio_endettement', 'ratio_stock_CA_jours', 'rentabilite_economique', 'rentabilite_fonds_propres', 'resultat', 'resultat_exploitation', 'salaires_CA', 'salaires_charges_sociales', 'taux_croissance_chiffre_affaires', 'taux_levier', 'taux_marge_EBITDA']
+finances_consolidees: list[0] first=None
+representants: list[1] keys=['adresse_ligne_1', 'adresse_ligne_2', 'adresse_ligne_3', 'age', 'code_commune', 'code_commune_de_naissance', 'code_nationalite', 'code_nationalité', 'code_pays', 'code_pays_de_naissance', 'code_postal', 'codes_nationalites', 'date_de_naissance', 'date_de_naissance_formate', 'date_de_naissance_rgpd', 'date_de_naissance_rgpd_formatee', 'date_prise_de_poste', 'departement', 'departement_de_naissance', 'nationalite', 'nom', 'nom_complet', 'nom_usage', 'pays', 'pays_de_naissance', 'personne_morale', 'prenom', 'prenom_usuel', 'prenoms', 'pseudonyme', 'qualite', 'qualites', 'sexe', 'ville', 'ville_de_naissance']
+beneficiaires_effectifs: list[0] first=None
+depots_actes: list[5] keys=['actes', 'date_depot', 'date_depot_formate', 'disponible', 'nom_fichier_pdf', 'token']
+comptes: list[6] keys=['annee_cloture', 'confdentialite', 'confidentialite', 'confidentialite_compte_de_resultat', 'date_cloture', 'date_depot', 'date_depot_formate', 'disponible', 'disponible_xlsx', 'type_comptes']
+publications_bodacc: list[20] keys=['adresse', 'annonce_rectificative', 'bodacc', 'date', 'date_cloture', 'denomination', 'descriptif', 'forme_juridique', 'greffe', 'numero_annonce', 'numero_parution', 'rcs', 'sigle', 'type', 'type_depot']
+procedures_collectives: list[0] first=None
+procedure_collective_existe: False
+procedure_collective_en_cours: False
+derniers_statuts: dict keys=['date_acte', 'date_acte_formate', 'date_depot', 'date_depot_formate', 'decision', 'disponible', 'nom_fichier_pdf', 'token', 'type']
+extrait_immatriculation: dict keys=['token']
+association: None
