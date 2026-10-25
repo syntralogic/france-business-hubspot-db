@@ -2,15 +2,15 @@ visible companies: 105592
 section establishments table company_addresses            companies with data: 105592 (100.0%)
 section legal        table company_legal_info           companies with data: 5 (0.0%)
 section documents    table company_documents            companies with data: 5 (0.0%)
-section directors    table company_directors            companies with data: 54971 (52.1%)
-section financials   table company_financials           companies with data: 6 (0.0%)
+section directors    table company_directors            companies with data: 64365 (61.0%)
+section financials   table company_financials           companies with data: 5263 (5.0%)
 section certificates table v_company_certificates       companies with data: 6811 (6.5%)
 section activities   table company_activities           companies with data: 0 (0.0%)
 section declarations table company_site_declarations    companies with data: 0 (0.0%)
-section relations    table v_company_relations          companies with data: 10244 (9.7%)
+section relations    table v_company_relations          companies with data: 11262 (10.7%)
 section events       table company_register_events      companies with data: 2 (0.0%)
 contact website  companies: 0
 contact phone    companies: 0
 contact email    companies: 0
 companies with more than 1 establishment in DB: 4236
-pappers financial companies: 6 | annuaire financial companies: 0
+pappers financial companies: 6 | annuaire financial companies: 5257
