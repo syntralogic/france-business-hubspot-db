@@ -11,6 +11,7 @@ Do not run two workflows that change the schema at the same time (the "Schema" s
 | Enrich legal events (BODACC) | BODACC announcements and register events | free |
 | Load full RGE (ADEME) | RGE only (157k rows from the official API) | free |
 | Enrich Pappers (financials) | Pappers: financials, legal sheet, document list. One credit per company; start with 5. | **paid** |
+| Database maintenance | TRUNCATE the load staging tables and ANALYZE (frees ~40 MB). Also runs automatically at the end of every SIRENE load. | free |
 | Coverage report / Diagnose stats | Read-only: how many companies have each kind of data, query timings. Result is written to the `diag` branch. | free |
 
 Secrets are never written to the repo or to the `diag` branch.

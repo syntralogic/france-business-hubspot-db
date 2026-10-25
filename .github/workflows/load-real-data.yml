@@ -12,6 +12,9 @@ on:
       departments:
         description: "Departments, comma list (e.g. 69,42,01). Free Supabase is 500 MB: start small. Empty = all France (will NOT fit)"
         default: "69"
+      skip_schema:
+        description: "yes = skip the Schema step (use while another workflow is writing: it would wait for a lock)"
+        default: "no"
       purge_demo:
         description: "Empty the demo companies first (yes/no)"
         default: "yes"
@@ -31,7 +34,7 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       SCOPE_NAF: ${{ inputs.naf || '41,42,43' }}
-      SCOPE_DEPARTMENTS: ${{ inputs.departments || '69,42,01,38,73,74,13,83,06,34' }}   # unattended runs use this list
+      SCOPE_DEPARTMENTS: ${{ inputs.departments || '69,42,01,38,73,74,13,83,06,34,33,31,44' }}   # unattended runs use this list
       UL_URL: https://www.data.gouv.fr/api/1/datasets/r/825f4199-cadd-486c-ac46-a65a8ea1a047
       ETAB_URL: https://www.data.gouv.fr/api/1/datasets/r/0651fb76-bcf3-4f6a-a38d-bc04fa708576
     steps:
@@ -42,6 +45,7 @@ jobs:
       - name: Check secret
         run: test -n "$DATABASE_URL" || { echo "Add repo secret DATABASE_URL first"; exit 1; }
       - name: Schema
+        if: ${{ inputs.skip_schema != 'yes' }}
         run: bash scripts/init_db.sh
       - name: Purge demo
         if: ${{ inputs.purge_demo == 'yes' }}
@@ -63,6 +67,8 @@ jobs:
       - name: Load (scoped)
         run: |
           python -m fbdb.load.sirene_loader --ul data/raw/StockUniteLegale_utf8.csv --etab data/raw/StockEtablissement_utf8.csv --only-active
+      - name: Free staging tables
+        run: psql "$DATABASE_URL" -c "TRUNCATE stg_sirene_ul, stg_sirene_etab"
       - name: Refresh planner statistics
         run: psql "$DATABASE_URL" -c "ANALYZE"
       - name: Count
