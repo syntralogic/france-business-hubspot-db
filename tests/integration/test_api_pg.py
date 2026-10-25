@@ -87,6 +87,8 @@ def test_company_detail_sections_and_privacy(db):
     d = api.company_detail(DSN, A)
     assert d["legal"][0]["vat_number"] == "FR61492892195" and float(d["legal"][0]["share_capital_eur"]) == 7000 and "commercial_opposition" not in d["legal"][0]
     assert d["documents"][0]["kind"] == "accounts" and set(d["documents"][0]) == {"kind", "doc_date", "label", "available"}
+    assert d["checked"] == {"directors": False, "financials": False, "legal": True}
+    assert d["establishments"] and set(d["establishments"][0]) == {"siret", "is_head_office", "status", "street", "postal_code", "city", "creation_date"}
     assert d["directors"][0]["last_name"] == "Martin" and d["directors"][0]["role"] == "Gérant" and "birth_year" not in d["directors"][0]
     assert d["legal_name"] == "ALPHA BOULANGERIE SARL"
     assert d["financials"][0]["equity_eur"] == 250000 and d["financials"][0]["debt_eur"] == 90000

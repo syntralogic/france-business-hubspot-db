@@ -147,6 +147,8 @@ def warm_stats(dsn: str) -> None:
 
 
 DETAIL_SECTIONS = {
+    "establishments": ("SELECT a.siret, a.is_head_office, a.status, a.street, a.postal_code, a.city, a.creation_date FROM company_addresses a "
+                       "WHERE a.company_id = %s AND a.is_diffusible ORDER BY a.is_head_office DESC, a.siret LIMIT 30"),
     "legal": ("SELECT l.share_capital_eur, l.vat_number, l.rcs_number, l.rcs_registry, l.rcs_status, l.rcs_registered_on, l.corporate_purpose, "
               "l.exercise_forms, l.collective_agreements, l.fiscal_year_end, l.next_closing_date FROM company_legal_info l WHERE l.company_id = %s"),
     "documents": ("SELECT d.kind, d.doc_date, d.label, d.available FROM company_documents d WHERE d.company_id = %s "
@@ -181,6 +183,11 @@ def company_detail(dsn: str, siren: str) -> Optional[dict]:
         out = {"siren": head["siren"], "legal_name": head["legal_name"]}
         for name, sql in DETAIL_SECTIONS.items():
             out[name] = conn.execute(sql, (head["company_id"],)).fetchall()
+        # lets the viewer tell "not collected yet" from "collected, nothing found"
+        out["checked"] = conn.execute(
+            "SELECT (directors_checked_at IS NOT NULL) AS directors, (financials_checked_at IS NOT NULL) AS financials, "
+            "EXISTS (SELECT 1 FROM company_legal_info l WHERE l.company_id = companies.company_id) AS legal FROM companies WHERE company_id = %s",
+            (head["company_id"],)).fetchone()
     return out
 
 
