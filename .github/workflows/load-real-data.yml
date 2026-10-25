@@ -2,6 +2,8 @@ name: Load real SIRENE data
 # Manual run: GitHub -> Actions -> "Load real SIRENE data" -> Run workflow.
 # Needs ONE repo secret: DATABASE_URL (Render Postgres EXTERNAL connection string).
 on:
+  schedule:
+    - cron: "0 2 3 * *"   # monthly: new SIRENE stock (new companies, closures) for the scope below
   workflow_dispatch:
     inputs:
       naf:
@@ -19,14 +21,17 @@ on:
       legal_forms_csv_url:
         description: "Optional: URL of categories_juridiques.csv"
         default: ""
+concurrency:
+  group: db-writes
+  cancel-in-progress: false
 jobs:
   load:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      SCOPE_NAF: ${{ inputs.naf }}
-      SCOPE_DEPARTMENTS: ${{ inputs.departments }}
+      SCOPE_NAF: ${{ inputs.naf || '41,42,43' }}
+      SCOPE_DEPARTMENTS: ${{ inputs.departments || '69,42,01,38,73,74,13,83,06,34' }}   # unattended runs use this list
       UL_URL: https://www.data.gouv.fr/api/1/datasets/r/825f4199-cadd-486c-ac46-a65a8ea1a047
       ETAB_URL: https://www.data.gouv.fr/api/1/datasets/r/0651fb76-bcf3-4f6a-a38d-bc04fa708576
     steps:

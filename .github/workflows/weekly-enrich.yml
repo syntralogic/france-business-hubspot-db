@@ -1,0 +1,42 @@
+name: Weekly enrichment (free sources)
+# Sunday 03:00 UTC. No API key needed. A failing step turns the run red (GitHub emails the repository owner) but the next steps still run.
+on:
+  schedule:
+    - cron: "0 3 * * 0"
+  workflow_dispatch:
+concurrency:
+  group: db-writes
+  cancel-in-progress: false
+jobs:
+  weekly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: pip install -r requirements.txt -c constraints.txt && pip install -e . 2>/dev/null || true
+      - name: Schema (new migrations only)
+        run: bash scripts/init_db.sh
+      - name: Geocode new establishments (BAN)
+        if: always()
+        run: python -m fbdb.enrich.geocode --limit 200000
+      - name: ADEME RGE (full list)
+        if: always()
+        run: |
+          mkdir -p data/raw && python scripts/fetch_rge.py data/raw/rge_full.csv
+          python -m fbdb.enrich.ademe_rge data/raw/rge_full.csv --rejects /tmp/rge_rejects.csv
+      - name: Directors and free finances (new companies, then the oldest checks)
+        if: always()
+        run: python -m fbdb.enrich.directors --limit 10000
+      - name: BODACC (last 8 days)
+        if: always()
+        run: python -m fbdb.enrich.bodacc --days 8
+      - name: Register events
+        if: always()
+        run: python -m fbdb.enrich.register_events --days 30
+      - name: Refresh planner statistics
+        if: always()
+        run: psql "$DATABASE_URL" -c "ANALYZE"

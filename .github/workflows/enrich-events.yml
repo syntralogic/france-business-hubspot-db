@@ -6,6 +6,9 @@ on:
       days:
         description: "How many past days to read"
         default: "30"
+concurrency:
+  group: db-writes
+  cancel-in-progress: false
 jobs:
   events:
     runs-on: ubuntu-latest

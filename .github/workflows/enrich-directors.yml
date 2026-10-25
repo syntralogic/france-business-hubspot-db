@@ -9,6 +9,15 @@ on:
       refresh_days:
         description: "Re-check companies not checked for N days (30 = only new ones; 0 = everyone again, also stores the free Annuaire finances)"
         default: "30"
+concurrency:
+  group: db-writes
+  cancel-in-progress: false
+      rounds:
+        description: "Auto-continue: if companies are still waiting after this run, start another run (up to this many runs in total; 1 = no auto-continue)"
+        default: "1"
+permissions:
+  actions: write
+  contents: read
 jobs:
   directors:
     runs-on: ubuntu-latest
@@ -25,3 +34,31 @@ jobs:
         with: {python-version: "3.12", cache: pip}
       - run: pip install -r requirements.txt -c constraints.txt && pip install -e . 2>/dev/null || true
       - run: python -m fbdb.enrich.directors --limit ${{ inputs.limit }} --refresh-days ${{ inputs.refresh_days }} --shard ${{ matrix.shard }}/4
+
+  continue:
+    needs: directors
+    if: always() && inputs.rounds != '' && inputs.rounds != '1'
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: pip install -r requirements.txt -c constraints.txt && pip install -e . 2>/dev/null || true
+      - name: Companies still waiting?
+        id: due
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import os, psycopg
+          from fbdb.enrich.directors import SELECT_DUE
+          with psycopg.connect(os.environ["DATABASE_URL"]) as c:
+              n = len(c.execute(SELECT_DUE, {"days": 30, "limit": 10**9, "shards": 1, "shard": 0}).fetchall())
+          print(f"due={n}")
+          PY
+      - name: Start the next run
+        if: steps.due.outputs.due != '0'
+        run: |
+          echo "still waiting: ${{ steps.due.outputs.due }}"
+          gh workflow run enrich-directors.yml -f limit=${{ inputs.limit }} -f refresh_days=30 -f rounds=$(( ${{ inputs.rounds }} - 1 ))

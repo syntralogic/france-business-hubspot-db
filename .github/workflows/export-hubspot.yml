@@ -1,7 +1,9 @@
 name: Export HubSpot CSV
 # Streams the export view into HubSpot-ready CSV files (UTF-8, <=1M rows per file) + an error report, and a coverage metrics report.
-# Download them from the run page: Artifacts -> hubspot-export (kept 3 days). Never contains phone/email unless they were collected and are allowed.
+# Download them from the run page: Artifacts -> hubspot-export (kept 14 days). Never contains phone/email unless they were collected and are allowed.
 on:
+  schedule:
+    - cron: "0 6 * * 1"   # every Monday, after the weekly enrichment
   workflow_dispatch:
     inputs:
       siret_is_import_key:
@@ -57,7 +59,7 @@ jobs:
           path: |
             data/exports
             reports/metrics
-          retention-days: 3
+          retention-days: 14
       - name: Publish summary to branch diag
         if: always()
         run: |

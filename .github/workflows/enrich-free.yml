@@ -13,6 +13,9 @@ on:
       directors_limit:
         description: "Directors: max companies this run (16,000 = all of department 69)"
         default: "20000"
+concurrency:
+  group: db-writes
+  cancel-in-progress: false
 jobs:
   enrich:
     runs-on: ubuntu-latest

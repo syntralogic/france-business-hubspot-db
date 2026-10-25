@@ -3,6 +3,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+concurrency:
+  group: db-writes
+  cancel-in-progress: false
 jobs:
   rge:
     runs-on: ubuntu-latest
