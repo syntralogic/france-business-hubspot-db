@@ -1,29 +1,78 @@
 == files
-total 66712
--rw-r--r-- 1 runner runner 68305394 Oct 25 10:21 hubspot_companies_2026-10-25_part01.csv
--rw-r--r-- 1 runner runner      350 Oct 25 10:21 hubspot_errors_2026-10-25.csv
+total 66844
+-rw-r--r-- 1 runner runner    37368 Oct 25 10:33 hubspot_TEST_100_rows.csv
+-rw-r--r-- 1 runner runner 68402983 Oct 25 10:33 hubspot_companies_2026-10-25_part01.csv
+-rw-r--r-- 1 runner runner      547 Oct 25 10:33 hubspot_errors_2026-10-25.csv
 == lines per file
+     101 data/exports/hubspot_TEST_100_rows.csv
   203667 data/exports/hubspot_companies_2026-10-25_part01.csv
-       4 data/exports/hubspot_errors_2026-10-25.csv
-  203671 total
+       6 data/exports/hubspot_errors_2026-10-25.csv
+  203774 total
 == result
-2026-10-25 10:21:23,850 INFO fbdb.export Export finished: {'exported': 203666, 'rejected': 0, 'warnings': 3, 'files': ['data/exports/hubspot_companies_2026-10-25_part01.csv'], 'error_report': 'data/exports/hubspot_errors_2026-10-25.csv'}
-{'exported': 203666, 'rejected': 0, 'warnings': 3, 'files': ['data/exports/hubspot_companies_2026-10-25_part01.csv'], 'error_report': 'data/exports/hubspot_errors_2026-10-25.csv'}
+2026-10-25 10:33:26,351 INFO fbdb.export Export finished: {'exported': 203666, 'rejected': 0, 'warnings': 5, 'files': ['data/exports/hubspot_companies_2026-10-25_part01.csv'], 'error_report': 'data/exports/hubspot_errors_2026-10-25.csv'}
+{'exported': 203666, 'rejected': 0, 'warnings': 5, 'files': ['data/exports/hubspot_companies_2026-10-25_part01.csv'], 'error_report': 'data/exports/hubspot_errors_2026-10-25.csv'}
+== error report
+row_number,siret,id_interne,severity,code,field,message,value
+82917,53933293200026,136597,warning,BAD_NUMBER,annualrevenue,Must be numeric; blanked,-622.00
+92835,79264705900015,142143,warning,BAD_NUMBER,annualrevenue,Must be numeric; blanked,-6774.00
+97487,79977414600010,144754,warning,BAD_NUMBER,annualrevenue,Must be numeric; blanked,-1500.00
+101530,80408070300015,146930,warning,BAD_NUMBER,annualrevenue,Must be numeric; blanked,-106138.00
+118452,83068326400048,156369,warning,BAD_NUMBER,annualrevenue,Must be numeric; blanked,-94181.00
+== fill rates
+rows: 203666, distinct SIRET: 203666
+fill rate per column (non-empty / rows):
+  Company name                        203666  100.0%
+  Company domain name                      0    0.0%
+  Phone Number                             0    0.0%
+  Street Address                      203317   99.8%
+  Street Address 2                     57555   28.3%
+  City                                203657  100.0%
+  State/Region                        203666  100.0%
+  Postal Code                         203666  100.0%
+  Country/Region                      203666  100.0%
+  Website URL                              0    0.0%
+  LinkedIn Company Page                    0    0.0%
+  Number of Employees                      8    0.0%
+  Annual Revenue                        3927    1.9%
+  SIRET                               203666  100.0%
+  SIREN                               203666  100.0%
+  Raison sociale                      203666  100.0%
+  Code NAF                            203666  100.0%
+  Libelle NAF                              0    0.0%
+  Metier                                   0    0.0%
+  Forme juridique                     203666  100.0%
+  Siege                               203666  100.0%
+  Statut etablissement                203666  100.0%
+  Date creation                       203666  100.0%
+  Date cloture                             0    0.0%
+  Departement code                    203666  100.0%
+  Departement                         203666  100.0%
+  Region                              203666  100.0%
+  Categorie taille                    180759   88.8%
+  Tranche effectifs                   203666  100.0%
+  Annee CA                              3932    1.9%
+  Certifications                        8564    4.2%
+  RGE qualifications                    7479    3.7%
+  RGE valide jusqu au                      0    0.0%
+  Dirigeant prenom                     68104   33.4%
+  Dirigeant nom                        68670   33.7%
+  Dirigeant fonction                   68565   33.7%
+  Email professionnel                      0    0.0%
+  Statut email                        203666  100.0%
+  Statut telephone                         0    0.0%
+  Source contact                           0    0.0%
+  Source principale                   203666  100.0%
+  Date verification                        0    0.0%
+  Score confiance                          0    0.0%
+  Fraicheur donnees                   203666  100.0%
+  Note Google                              0    0.0%
+  Nombre avis Google                       0    0.0%
+  URL Google                               0    0.0%
+  ID interne                          203666  100.0%
+wrote hubspot_TEST_100_rows.csv (100 random companies that are not sole proprietors)
 == metrics
-Traceback (most recent call last):
-  File "<frozen runpy>", line 198, in _run_module_as_main
-  File "<frozen runpy>", line 88, in _run_code
-  File "/home/runner/work/france-business-hubspot-db/france-business-hubspot-db/src/fbdb/report/metrics.py", line 222, in <module>
-    main()
-  File "/home/runner/work/france-business-hubspot-db/france-business-hubspot-db/src/fbdb/report/metrics.py", line 214, in main
-    m, rates = collect(os.environ["DATABASE_URL"], target_rows=a.target_rows)
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/runner/work/france-business-hubspot-db/france-business-hubspot-db/src/fbdb/report/metrics.py", line 94, in collect
-    row = conn.execute(sql.SQL("SELECT {} FROM v_hubspot_companies WHERE status='active'").format(sql.SQL(", ").join(selects))).fetchone()
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/psycopg/connection.py", line 304, in execute
-    raise ex.with_traceback(None)
-psycopg.errors.QueryCanceled: canceling statement due to statement timeout
+reports/metrics
+{'exportable': 203666, 'coverage': 1.0, 'gaps': ['last_verified_at', 'confidence', 'match_geocode_verified']}
 == first rows (company data only)
 Company name,Company domain name,Phone Number,Street Address,Street Address 2,City,State/Region,Postal Code,Country/Region,Website URL,LinkedIn Company Page,Number of Employees,Annual Revenue,SIRET,SIREN,Raison sociale,Code NAF,Libelle NAF,Metier,Forme juridique,Siege,Statut etablissement,Date creation,Date cloture,Departement code,Departement,Region,Categorie taille,Tranche effectifs,Annee CA,Certifications,RGE qualifications,RGE valide jusqu au,Dirigeant prenom,Dirigeant nom,Dirigeant fonction,Email professionnel,Statut email,Statut telephone,Source contact,Source principale,Date verification,Score confiance,Fraicheur donnees,Note Google,Nombre avis Google,URL Google,ID interne
 BLANC RENE,,,IMPASSE DE DOUVILLE,,PUGET-VILLE,Provence-Alpes-Côte d'Azur,83390,France,,,,,00634188700039,006341887,RENE BLANC,01.21Z,,,Entrepreneur individuel,false,active,2002-01-01,,83,Var,Provence-Alpes-Côte d'Azur,PME,Unité non employeuse,,,,,,,,,unavailable,,,sirene,,,fresh,,,,88620
