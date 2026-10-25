@@ -1,0 +1,16 @@
+name: Annuaire response sample
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  s:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/annuaire_sample.py /tmp/annuaire_sample.txt
+      - name: Publish
+        if: always()
+        run: |
+          git config user.email "ci@example.com"; git config user.name "ci"
+          git fetch -q origin diag; git checkout -q -B diag origin/diag
+          cp /tmp/annuaire_sample.txt annuaire_sample.txt; git add annuaire_sample.txt; git commit -qm "annuaire sample"; git push -q origin diag
