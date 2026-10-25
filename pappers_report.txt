@@ -1,0 +1,12 @@
+checks by status: [('found', 6), ('not_found', 4)]
+details (not_found/inaccessible): [('not_found', 'no accounts in the provider data (not proof of none)', 4)]
+financial rows: (18, 6)
+legal sheets: (5,) documents: (30,)
+  row: (7, 2025, None, 12, Decimal('223826000.00'), Decimal('24373000.00'), Decimal('207000000.00'), 582)
+  row: (7, 2024, None, 12, Decimal('342730000.00'), Decimal('25745000.00'), Decimal('185985000.00'), None)
+  row: (7, 2023, None, 12, Decimal('438206000.00'), Decimal('10158000.00'), Decimal('160242000.00'), None)
+  row: (6, 2022, None, 12, Decimal('38874249.00'), Decimal('1839847.00'), Decimal('12412398.00'), None)
+  row: (6, 2021, None, 12, Decimal('36319964.00'), Decimal('2128865.00'), Decimal('12090794.00'), None)
+  row: (6, 2020, None, 12, None, Decimal('989630.00'), Decimal('9980203.00'), None)
+  row: (5, 2025, None, 12, Decimal('20771200.00'), Decimal('664636.00'), Decimal('5257755.00'), None)
+  row: (5, 2024, None, 12, Decimal('22541380.00'), Decimal('947832.00'), Decimal('4613039.00'), None){'read': 5, 'with_financials': 1, 'no_accounts': 4, 'not_found': 0, 'errors': 0, 'credits_used': 5, 'conflicts': 0, 'cap_reached': False, 'stopped_no_credits': False}
