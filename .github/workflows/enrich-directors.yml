@@ -6,6 +6,9 @@ on:
       limit:
         description: "Companies per worker this run (~1 company/s per worker)"
         default: "15000"
+      refresh_days:
+        description: "Re-check companies not checked for N days (30 = only new ones; 0 = everyone again, also stores the free Annuaire finances)"
+        default: "30"
 jobs:
   directors:
     runs-on: ubuntu-latest
@@ -21,4 +24,4 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: "3.12", cache: pip}
       - run: pip install -r requirements.txt -c constraints.txt && pip install -e . 2>/dev/null || true
-      - run: python -m fbdb.enrich.directors --limit ${{ inputs.limit }} --shard ${{ matrix.shard }}/4
+      - run: python -m fbdb.enrich.directors --limit ${{ inputs.limit }} --refresh-days ${{ inputs.refresh_days }} --shard ${{ matrix.shard }}/4
