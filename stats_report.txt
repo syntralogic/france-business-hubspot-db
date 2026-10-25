@@ -1,6 +1,5 @@
-ANALYZE done in 9.1 s
-NEW cheap stats OK 0.7 s -> [(111576, 105592, 5356, 0)]
-first page of 25 OK 0.8 s -> [('49289219500016',), ('81823258900015',), ('50032278900040',)]
-cheap: establishments OK 0.4 s -> [(203666,)]
-cheap: rge establishments OK 0.2 s -> [(5043,)]
-db size OK 0.2 s -> [('235 MB',)]
+ANALYZE done in 18.7 s
+dashboard stats OK 114.2 s -> [(111576, 105592, 7903, 0)]
+first page of 25 OK 1.0 s -> [('49289219500016',), ('81823258900015',), ('50032278900040',), ('79148400900018',), ('49328963100019',), ('50380979000010',), ('49480190500022',), ('48170776800026',), ('84852901200017',), ('50185432700027',), ('49862066500014',), ('49196677600016',)]
+database size OK 0.2 s -> [('338 MB',)]
+largest tables (data + indexes) OK 0.3 s -> [('companies', '96 MB', 195464), ('company_addresses', '68 MB', 203666), ('company_directors', '34 MB', 123376), ('company_change_history', '30 MB', 148895), ('stg_sirene_etab', '26 MB', 115047), ('bodacc_events', '25 MB', 72152), ('stg_sirene_ul', '17 MB', 111375), ('company_certifications', '16 MB', 17972), ('company_relations', '8920 kB', 25519), ('company_financials', '3408 kB', 23014), ('data_quality_issues', '288 kB', 824), ('department_reference', '104 kB', 101)]
