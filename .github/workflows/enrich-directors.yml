@@ -9,12 +9,12 @@ on:
       refresh_days:
         description: "Re-check companies not checked for N days (30 = only new ones; 0 = everyone again, also stores the free Annuaire finances)"
         default: "30"
-concurrency:
-  group: db-writes
-  cancel-in-progress: false
       rounds:
         description: "Auto-continue: if companies are still waiting after this run, start another run (up to this many runs in total; 1 = no auto-continue)"
         default: "1"
+concurrency:
+  group: db-writes
+  cancel-in-progress: false
 permissions:
   actions: write
   contents: read
