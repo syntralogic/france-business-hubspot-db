@@ -1,5 +1,5 @@
-ANALYZE done in 13.6 s
-dashboard stats OK 5.3 s -> [(149301, 140588, 8029, 0)]
-first page of 25 OK 1.8 s -> [('49289219500016',), ('81823258900015',), ('50032278900040',), ('79148400900018',), ('49328963100019',), ('50380979000010',), ('49480190500022',), ('48170776800026',), ('84852901200017',), ('50185432700027',), ('49862066500014',), ('49196677600016',)]
-database size OK 0.2 s -> [('328 MB',)]
-largest tables (data + indexes) OK 0.2 s -> [('companies', '107 MB', 258209), ('company_addresses', '88 MB', 269728), ('company_directors', '34 MB', 123376), ('company_change_history', '30 MB', 148895), ('bodacc_events', '25 MB', 72152), ('company_certifications', '16 MB', 17972), ('company_relations', '9040 kB', 25519), ('company_financials', '3680 kB', 25036), ('data_quality_issues', '288 kB', 824), ('department_reference', '104 kB', 101), ('legal_form_reference', '72 kB', 27), ('employee_range_reference', '64 kB', 16)]
+ANALYZE done in 6.9 s
+dashboard stats OK 2.0 s -> [(163820, 154111, 8081, 0)]
+first page of 25 OK 1.1 s -> [('49289219500016',), ('81823258900015',), ('50032278900040',), ('79148400900018',), ('49328963100019',), ('50380979000010',), ('49480190500022',), ('48170776800026',), ('84852901200017',), ('50185432700027',), ('49862066500014',), ('49196677600016',)]
+database size OK 0.2 s -> [('312 MB',)]
+largest tables (data + indexes) OK 0.2 s -> [('companies', '109 MB', 280842), ('company_addresses', '95 MB', 293509), ('company_directors', '34 MB', 123376), ('company_change_history', '30 MB', 148895), ('company_certifications', '16 MB', 17972), ('company_relations', '9040 kB', 25519), ('company_financials', '3680 kB', 25036), ('bodacc_events', '400 kB', 1180), ('data_quality_issues', '288 kB', 824), ('department_reference', '104 kB', 101), ('legal_form_reference', '72 kB', 27), ('employee_range_reference', '64 kB', 16)]
