@@ -1,4 +1,4 @@
-name: Enrich contacts (PAID: Firecrawl / Hunter / Twilio)
+name: "Enrich contacts (PAID - Firecrawl, Hunter, Twilio)"
 # PAID. Keys live in the repository secrets (Settings > Secrets and variables > Actions), never in code:
 #   DATABASE_URL, FIRECRAWL_API_KEY, HUNTER_API_KEY, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN  (only the ones the chosen step needs)
 # Run ONE step at a time, first with limit 5, read the log, then raise the limit. Every step has a daily cap and a memory table:
