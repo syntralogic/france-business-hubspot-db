@@ -1,0 +1,66 @@
+name: Enrich contacts (PAID: Firecrawl / Hunter / Twilio)
+# PAID. Keys live in the repository secrets (Settings > Secrets and variables > Actions), never in code:
+#   DATABASE_URL, FIRECRAWL_API_KEY, HUNTER_API_KEY, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN  (only the ones the chosen step needs)
+# Run ONE step at a time, first with limit 5, read the log, then raise the limit. Every step has a daily cap and a memory table:
+# a company already done is not paid twice. Contact values (phones, emails, names) are NEVER written to the repo or to a branch;
+# the run only prints counts.
+on:
+  workflow_dispatch:
+    inputs:
+      step:
+        description: "Which step"
+        type: choice
+        required: true
+        options:
+          - "1 website + phones/emails/people from the proven site (Firecrawl)"
+          - "2 directors -> interlocutors (free)"
+          - "3 direct email of a named director (Hunter Email Finder)"
+          - "4 verify emails (Hunter Verifier)"
+          - "5 line type of phones (Twilio Lookup)"
+      limit:
+        description: "Max companies this run (start with 5)"
+        default: "5"
+permissions:
+  contents: read
+concurrency:
+  group: db-writes
+  cancel-in-progress: false
+jobs:
+  contacts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
+      HUNTER_API_KEY: ${{ secrets.HUNTER_API_KEY }}
+      TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+      TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+      FIRECRAWL_DAILY_CAP: "200"
+      HUNTER_FINDER_DAILY_CAP: "50"
+      HUNTER_DAILY_CAP: "100"
+      TWILIO_DAILY_CAP: "100"
+      STEP: ${{ inputs.step }}
+      LIMIT: ${{ inputs.limit }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: pip install -r requirements.txt -c constraints.txt && pip install -e . 2>/dev/null || true
+      - name: Schema (new migrations only)
+        run: bash scripts/init_db.sh
+      - name: Which keys are set (no secret printed)
+        run: python -m fbdb.report.preflight || true
+      - name: Run the chosen step
+        run: |
+          case "$STEP" in
+            1*) python -m fbdb.enrich.website --limit "$LIMIT" ;;
+            2*) python -m fbdb.enrich.interlocutors sync-directors --limit "$LIMIT" ;;
+            3*) python -m fbdb.enrich.email_find --limit "$LIMIT" ;;
+            4*) python -m fbdb.enrich.email_verify --limit "$LIMIT" ;;
+            5*) python -m fbdb.enrich.phone_lookup --limit "$LIMIT" ;;
+            *) echo "unknown step"; exit 2 ;;
+          esac 2>&1 | tee /tmp/step_log.txt
+      - name: Coverage counts (aggregates only) in the run summary
+        if: always()
+        run: |
+          { echo "### Counts after step: $STEP (limit $LIMIT)"; echo '```'; python -m fbdb.report.metrics 2>&1 | grep -E "match_(companies_with_(proven_website|interlocutor)|directors_)" || true; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

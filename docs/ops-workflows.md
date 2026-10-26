@@ -27,3 +27,11 @@ Secrets are never written to the repo or to the `diag` branch.
 All workflows that write to the database share one lock (`db-writes`): they queue instead of running at the same time. A failed
 scheduled run turns red and GitHub emails the repository owner. To change the departments of the monthly refresh, edit
 `SCOPE_DEPARTMENTS` in `.github/workflows/load-real-data.yml`.
+
+## Paid contact steps (Firecrawl / Hunter / Twilio) without a shell
+Workflow **Enrich contacts**: pick ONE step (1 website + phones / emails / people from the proven site, 2 directors -> interlocutors, 3 Hunter email finder, 4 Hunter verifier, 5 Twilio line type) and a `limit`. Always start with `limit` 5 and read the log.
+1. Add the keys as repository secrets (Settings > Secrets and variables > Actions): `FIRECRAWL_API_KEY`, `HUNTER_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` (only what the step needs; `DATABASE_URL` is already there).
+2. Suggested order for the client's test lot (about 100 companies): free directors workflow, then step 2, step 1, step 3, step 4, step 5.
+3. The run prints counts only (run summary); phones, emails and names are never written to the repo or to a branch. Look at the values in the database itself.
+4. Daily caps are set in the workflow file (`FIRECRAWL_DAILY_CAP`, `HUNTER_FINDER_DAILY_CAP`, `HUNTER_DAILY_CAP`, `TWILIO_DAILY_CAP`); edit them to change the budget.
+Not covered: a provider of directors' direct mobiles (decision and contract pending). None of these steps has run against a live key yet.
