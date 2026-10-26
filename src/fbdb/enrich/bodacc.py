@@ -98,7 +98,7 @@ def fetch_day(day: date, family: str, get: Callable[[dict], dict] = _get) -> Ite
 
 
 def run(dsn: str, days: int = 8, families: str = DEFAULT_FAMILIES, today: Optional[date] = None,
-        get: Callable[[dict], dict] = _get) -> dict:
+        get: Callable[[dict], dict] = _get, only_known: bool = True) -> dict:
     today = today or date.today()
     fams = [f.strip() for f in families.split(",") if f.strip()]
     stats = {"fetched": 0, "skipped": 0, "stored": 0, "issues": 0, "request_errors": 0}
@@ -119,6 +119,10 @@ def run(dsn: str, days: int = 8, families: str = DEFAULT_FAMILIES, today: Option
                 log.error("BODACC %s %s failed after retries: %s", day, fam, e)
     with psycopg.connect(dsn) as conn:
         src = conn.execute("SELECT source_id FROM data_sources WHERE code='bodacc'").fetchone()[0]
+        if only_known:   # the feed is France-wide: keep only announcements about companies we hold (saves database space)
+            known = {r[0] for r in conn.execute("SELECT siren FROM companies")}
+            stats["skipped_unknown"] = sum(1 for ev in events.values() if ev["siren"] not in known)
+            events = {k: ev for k, ev in events.items() if ev["siren"] in known}
         for ev in events.values():
             cur = conn.execute(
                 """INSERT INTO bodacc_events(bodacc_id,siren,family,family_label,avis_type,published_on,court,department,url)

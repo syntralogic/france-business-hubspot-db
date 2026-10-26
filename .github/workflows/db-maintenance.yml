@@ -13,6 +13,9 @@ jobs:
     steps:
       - name: Free staging tables and refresh statistics
         run: psql "$DATABASE_URL" -c "SET statement_timeout=0" -c "TRUNCATE stg_sirene_ul, stg_sirene_etab" -c "ANALYZE"
+      - name: Drop BODACC announcements about companies we do not hold, and give the space back
+        run: |
+          psql "$DATABASE_URL" -c "SET statement_timeout=0" -c "DELETE FROM bodacc_events b WHERE NOT EXISTS (SELECT 1 FROM companies c WHERE c.siren = b.siren)" -c "VACUUM FULL bodacc_events"
       - name: Show database size
         run: |
           psql "$DATABASE_URL" -Atc "select pg_size_pretty(pg_database_size(current_database()))"

@@ -29,12 +29,17 @@ def fake(params):
     return {"total_count": 1, "results": rows if "2026-10-12" in params["where"] else []}
 
 
-def test_idempotent_and_issue_only_for_known_siren(db):
+def test_idempotent_and_only_announcements_about_known_siren_are_kept(db):
     s1 = bodacc.run(DSN, days=2, today=date(2026, 10, 13), get=fake)
     s2 = bodacc.run(DSN, days=2, today=date(2026, 10, 13), get=fake)
-    assert s1["stored"] == 2 and s1["issues"] == 1
+    assert s1["stored"] == 1 and s1["issues"] == 1 and s1["skipped_unknown"] == 1   # the 999 999 999 announcement is not about a company we hold
     assert s2["stored"] == 0 and s2["issues"] == 0
     with psycopg.connect(DSN) as c:
-        assert c.execute("SELECT count(*) FROM bodacc_events").fetchone()[0] == 2
+        assert c.execute("SELECT count(*) FROM bodacc_events").fetchone()[0] == 1
         assert c.execute("SELECT issue_code FROM data_quality_issues").fetchall() == [("BODACC_COLLECTIVE_PROCEDURE",)]
         assert c.execute("SELECT status FROM companies").fetchone()[0] == "active"
+
+
+def test_only_known_false_keeps_every_announcement(db):
+    s = bodacc.run(DSN, days=2, today=date(2026, 10, 13), get=fake, only_known=False)
+    assert s["stored"] == 2
