@@ -1,6 +1,6 @@
 name: "Enrich contacts (PAID - Firecrawl, Hunter, Twilio)"
 # PAID. Keys live in the repository secrets (Settings > Secrets and variables > Actions), never in code:
-#   DATABASE_URL, FIRECRAWL_API_KEY, HUNTER_API_KEY, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN  (only the ones the chosen step needs)
+#   DATABASE_URL, FIRECRAWL_API_KEY, HUNTER_API_KEY, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, LUSHA_API_KEY, LUSHA_CONTRACT_REF  (only the ones the chosen step needs)
 # Run ONE step at a time, first with limit 5, read the log, then raise the limit. Every step has a daily cap and a memory table:
 # a company already done is not paid twice. Contact values (phones, emails, names) are NEVER written to the repo or to a branch;
 # the run only prints counts.
@@ -17,6 +17,7 @@ on:
           - "3 direct email of a named director (Hunter Email Finder)"
           - "4 verify emails (Hunter Verifier)"
           - "5 line type of phones (Twilio Lookup)"
+          - "6 direct mobile of a director (Lusha, needs a signed contract)"
       limit:
         description: "Max companies this run (start with 5)"
         default: "5"
@@ -35,6 +36,9 @@ jobs:
       HUNTER_API_KEY: ${{ secrets.HUNTER_API_KEY }}
       TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
       TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+      LUSHA_API_KEY: ${{ secrets.LUSHA_API_KEY }}
+      LUSHA_CONTRACT_REF: ${{ secrets.LUSHA_CONTRACT_REF }}
+      LUSHA_DAILY_CAP: "25"
       FIRECRAWL_DAILY_CAP: "200"
       HUNTER_FINDER_DAILY_CAP: "50"
       HUNTER_DAILY_CAP: "100"
@@ -58,6 +62,7 @@ jobs:
             3*) python -m fbdb.enrich.email_find --limit "$LIMIT" ;;
             4*) python -m fbdb.enrich.email_verify --limit "$LIMIT" ;;
             5*) python -m fbdb.enrich.phone_lookup --limit "$LIMIT" ;;
+            6*) python -m fbdb.enrich.mobile_find --limit "$LIMIT" ;;
             *) echo "unknown step"; exit 2 ;;
           esac 2>&1 | tee /tmp/step_log.txt
       - name: Coverage counts (aggregates only) in the run summary

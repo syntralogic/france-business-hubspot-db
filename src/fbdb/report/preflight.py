@@ -20,6 +20,7 @@ SERVICES = [
     ("Firecrawl", ["FIRECRAWL_API_KEY"],
      "python -m fbdb.enrich.website|social_search|site_activity --limit 5", "manual (--limit 5 first)", True),
     ("Hunter", ["HUNTER_API_KEY"], "python -m fbdb.enrich.email_verify|email_find --limit 5", "manual", True),
+    ("Lusha (direct mobiles)", ["LUSHA_API_KEY", "LUSHA_CONTRACT_REF"], "python -m fbdb.enrich.mobile_find --limit 5", "manual", True),
     ("Twilio Lookup", ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"], "python -m fbdb.enrich.phone_lookup --limit 5", "manual", True),
     ("ADEME RGE list", ["RGE_CSV_URL"], "python -m fbdb.enrich.ademe_rge --download", "automatic when set", False),
     ("Licensed contacts", ["LICENSED_CONTACTS_CONTRACT_REF"], "python -m fbdb.enrich.licensed_contacts FILE --contract-ref ...", "manual (contract)", True),
