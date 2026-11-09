@@ -1,16 +1,16 @@
 == files
-total 97012
--rw-r--r-- 1 runner runner    36794 Nov  2 14:34 hubspot_TEST_100_rows.csv
--rw-r--r-- 1 runner runner 99291566 Nov  2 14:34 hubspot_companies_2026-11-02_part01.csv
--rw-r--r-- 1 runner runner     5401 Nov  2 14:34 hubspot_errors_2026-11-02.csv
+total 97028
+-rw-r--r-- 1 runner runner    37010 Nov  9 15:04 hubspot_TEST_100_rows.csv
+-rw-r--r-- 1 runner runner 99307404 Nov  9 15:04 hubspot_companies_2026-11-09_part01.csv
+-rw-r--r-- 1 runner runner     5401 Nov  9 15:04 hubspot_errors_2026-11-09.csv
 == lines per file
      101 data/exports/hubspot_TEST_100_rows.csv
-  293510 data/exports/hubspot_companies_2026-11-02_part01.csv
-      56 data/exports/hubspot_errors_2026-11-02.csv
+  293510 data/exports/hubspot_companies_2026-11-09_part01.csv
+      56 data/exports/hubspot_errors_2026-11-09.csv
   293667 total
 == result
-2026-11-02 14:34:03,469 INFO fbdb.export Export finished: {'exported': 293509, 'rejected': 0, 'warnings': 55, 'files': ['data/exports/hubspot_companies_2026-11-02_part01.csv'], 'error_report': 'data/exports/hubspot_errors_2026-11-02.csv'}
-{'exported': 293509, 'rejected': 0, 'warnings': 55, 'files': ['data/exports/hubspot_companies_2026-11-02_part01.csv'], 'error_report': 'data/exports/hubspot_errors_2026-11-02.csv'}
+2026-11-09 15:04:12,973 INFO fbdb.export Export finished: {'exported': 293509, 'rejected': 0, 'warnings': 55, 'files': ['data/exports/hubspot_companies_2026-11-09_part01.csv'], 'error_report': 'data/exports/hubspot_errors_2026-11-09.csv'}
+{'exported': 293509, 'rejected': 0, 'warnings': 55, 'files': ['data/exports/hubspot_companies_2026-11-09_part01.csv'], 'error_report': 'data/exports/hubspot_errors_2026-11-09.csv'}
 == error report
 row_number,siret,id_interne,severity,code,field,message,value
 18715,32968071400105,29319,warning,BAD_NUMBER,annualrevenue,Must be numeric; blanked,-1486.00
@@ -101,8 +101,8 @@ fill rate per column (non-empty / rows):
   Categorie taille                    261094   89.0%
   Tranche effectifs                   293509  100.0%
   Annee CA                             28177    9.6%
-  Certifications                       13727    4.7%
-  RGE qualifications                   11888    4.1%
+  Certifications                       13788    4.7%
+  RGE qualifications                   11942    4.1%
   RGE valide jusqu au                      0    0.0%
   Dirigeant prenom                    133724   45.6%
   Dirigeant nom                       134533   45.8%
@@ -126,5 +126,5 @@ reports/metrics
 == first rows (company data only)
 Company name,Company domain name,Phone Number,Street Address,Street Address 2,City,State/Region,Postal Code,Country/Region,Website URL,LinkedIn Company Page,Number of Employees,Annual Revenue,SIRET,SIREN,Raison sociale,Code NAF,Libelle NAF,Metier,Forme juridique,Siege,Statut etablissement,Date creation,Date cloture,Departement code,Departement,Region,Categorie taille,Tranche effectifs,Annee CA,Certifications,RGE qualifications,RGE valide jusqu au,Dirigeant prenom,Dirigeant nom,Dirigeant fonction,Email professionnel,Statut email,Statut telephone,Source contact,Source principale,Date verification,Score confiance,Fraicheur donnees,Note Google,Nombre avis Google,URL Google,ID interne
 CISN COOPERATIVE,,,13 AVENUE BARBARA,,TRIGNAC,Pays de la Loire,44570,France,,,,3321087.00,00558011300040,005580113,CISN COOPERATIVE,41.10A,,,5547,true,active,2018-12-20,,44,Loire-Atlantique,Pays de la Loire,ETI,1 ou 2 salariés,2020,,,,Alain Maurice Jacques,BETTE,Administrateur,,unavailable,,,sirene,,,fresh,,,,203667
-ETABLISSEMENTS PIED ET PERRAUD,,,ROUTE DE LA VILLES MAHAUD,ZA LE HEQUEUX,PORNICHET,Pays de la Loire,44380,France,,,,,00607643400023,006076434,ETABLISSEMENTS PIED ET PERRAUD,43.32A,,,SAS (société par actions simplifiée),true,active,1988-02-01,,44,Loire-Atlantique,Pays de la Loire,PME,10 à 19 salariés,,RGE,"Efficacité énergétique - _ECO Artisan®_ - Charpentier (8611M3D109) (Fenêtres, volets, portes donnant sur l'extérieur); Efficacité énergétique - _ECO Artisan®_ - Charpentier (8611M3D110) (Fenêtres de toit); Efficacité énergétique - _ECO Artisan®_ - Charpentier (8611M3D111) (Isolation par l'intérieur des murs ou rampants de toitures  ou plafonds); Efficacité énergétiqu
+ETABLISSEMENTS PIED ET PERRAUD,,,ROUTE DE LA VILLES MAHAUD,ZA LE HEQUEUX,PORNICHET,Pays de la Loire,44380,France,,,,,00607643400023,006076434,ETABLISSEMENTS PIED ET PERRAUD,43.32A,,,SAS (société par actions simplifiée),true,active,1988-02-01,,44,Loire-Atlantique,Pays de la Loire,PME,10 à 19 salariés,,RGE,"Efficacité énergétique - _ECO Artisan®_ - Charpentier (8611M3D109) (Fenêtres, volets, portes donnant sur l'extérieur); Efficacité énergétique - _ECO Artisan®_ - Charpentier (8611M3D110) (Fenêtres de toit); Efficacité énergétique - _ECO Artisan®_ - Charpentier (8611M3D111) (Isolation par l'intérieur des murs ou rampants de toitures  ou plafonds); Efficacité énergétique - _ECO Artisan®_ - Cha
 BLANC RENE,,,IMPASSE DE DOUVILLE,,PUGET-VILLE,Provence-Alpes-Côte d'Azur,83390,France,,,,,00634188700039,006341887,RENE BLANC,01.21Z,,,Entrepreneur individuel,false,active,2002-01-01,,83,Var,Provence-Alpes-Côte d'Azur,PME,Unité non employeuse,,,,,,,,,unavailable,,,sirene,,,fresh,,,,88620
