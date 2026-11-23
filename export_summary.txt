@@ -1,16 +1,16 @@
 == files
-total 97044
--rw-r--r-- 1 runner runner    37010 Nov 16 14:40 hubspot_TEST_100_rows.csv
--rw-r--r-- 1 runner runner 99316131 Nov 16 14:40 hubspot_companies_2026-11-16_part01.csv
--rw-r--r-- 1 runner runner     5401 Nov 16 14:40 hubspot_errors_2026-11-16.csv
+total 97056
+-rw-r--r-- 1 runner runner    37010 Nov 23 17:15 hubspot_TEST_100_rows.csv
+-rw-r--r-- 1 runner runner 99329060 Nov 23 17:15 hubspot_companies_2026-11-23_part01.csv
+-rw-r--r-- 1 runner runner     5401 Nov 23 17:15 hubspot_errors_2026-11-23.csv
 == lines per file
      101 data/exports/hubspot_TEST_100_rows.csv
-  293510 data/exports/hubspot_companies_2026-11-16_part01.csv
-      56 data/exports/hubspot_errors_2026-11-16.csv
+  293510 data/exports/hubspot_companies_2026-11-23_part01.csv
+      56 data/exports/hubspot_errors_2026-11-23.csv
   293667 total
 == result
-2026-11-16 14:40:51,391 INFO fbdb.export Export finished: {'exported': 293509, 'rejected': 0, 'warnings': 55, 'files': ['data/exports/hubspot_companies_2026-11-16_part01.csv'], 'error_report': 'data/exports/hubspot_errors_2026-11-16.csv'}
-{'exported': 293509, 'rejected': 0, 'warnings': 55, 'files': ['data/exports/hubspot_companies_2026-11-16_part01.csv'], 'error_report': 'data/exports/hubspot_errors_2026-11-16.csv'}
+2026-11-23 17:15:12,015 INFO fbdb.export Export finished: {'exported': 293509, 'rejected': 0, 'warnings': 55, 'files': ['data/exports/hubspot_companies_2026-11-23_part01.csv'], 'error_report': 'data/exports/hubspot_errors_2026-11-23.csv'}
+{'exported': 293509, 'rejected': 0, 'warnings': 55, 'files': ['data/exports/hubspot_companies_2026-11-23_part01.csv'], 'error_report': 'data/exports/hubspot_errors_2026-11-23.csv'}
 == error report
 row_number,siret,id_interne,severity,code,field,message,value
 18715,32968071400105,29319,warning,BAD_NUMBER,annualrevenue,Must be numeric; blanked,-1486.00
@@ -101,8 +101,8 @@ fill rate per column (non-empty / rows):
   Categorie taille                    261094   89.0%
   Tranche effectifs                   293509  100.0%
   Annee CA                             28177    9.6%
-  Certifications                       13859    4.7%
-  RGE qualifications                   12007    4.1%
+  Certifications                       13904    4.7%
+  RGE qualifications                   12051    4.1%
   RGE valide jusqu au                      0    0.0%
   Dirigeant prenom                    133724   45.6%
   Dirigeant nom                       134533   45.8%
